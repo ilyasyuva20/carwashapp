@@ -64,16 +64,67 @@ function repairPlateString(str) {
 }
 
 /**
- * Creates candidate image passes for OCR:
- * Pass 1: EV Green Plate Channel Extractor (converts green EV plate background to white & text to crisp black)
- * Pass 2: Lower Bumper Region Contrast Pass
- * Pass 3: Middle Region Pass
- * Pass 4: Full Photo Pass
+ * Creates candidate image passes optimized for all Indian license plate formats:
+ * Pass 1: Commercial Taxi (Yellow Background, Black Text)
+ * Pass 2: Electric Vehicle (Green Background, White Embossed Text)
+ * Pass 3: Standard Private Vehicle Bumper Pass (White Background, Black Text)
+ * Pass 4: Middle Region Pass
+ * Pass 5: Full Photo Pass
  */
 function createOcrCandidates(img) {
   const candidates = [];
 
-  // Pass 1: EV Green Plate Channel Extractor
+  // Pass 1: Commercial Taxi Yellow Plate Channel Extractor
+  const createYellowTaxiCandidate = (cropX, cropY, cropW, cropH) => {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const srcX = Math.round(img.width * cropX);
+      const srcY = Math.round(img.height * cropY);
+      const srcW = Math.round(img.width * cropW);
+      const srcH = Math.round(img.height * cropH);
+
+      const targetW = Math.min(1000, srcW);
+      const targetH = Math.round((srcH * targetW) / srcW);
+
+      canvas.width = targetW;
+      canvas.height = targetH;
+
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetW, targetH);
+
+      const imgData = ctx.getImageData(0, 0, targetW, targetH);
+      const d = imgData.data;
+
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i];
+        const g = d[i + 1];
+        const b = d[i + 2];
+
+        // Yellow plate background has high Red & Green, low Blue
+        const isYellowBg = r > 130 && g > 110 && (r - b > 35) && (g - b > 25);
+        const isDarkText = r < 100 && g < 100 && b < 100;
+
+        let pixelVal = 255; // Default white canvas background
+        if (isDarkText) {
+          pixelVal = 0; // Solid black text for Tesseract
+        } else if (isYellowBg) {
+          pixelVal = 255; // Yellow background -> White canvas
+        }
+
+        d[i] = pixelVal;
+        d[i + 1] = pixelVal;
+        d[i + 2] = pixelVal;
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+      return canvas.toDataURL('image/jpeg', 0.95);
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Pass 2: EV Green Plate Channel Extractor
   const createEvCandidate = (cropX, cropY, cropW, cropH) => {
     try {
       const canvas = document.createElement('canvas');
@@ -100,7 +151,6 @@ function createOcrCandidates(img) {
         const g = d[i + 1];
         const b = d[i + 2];
 
-        // Green EV plate background has Green (g) significantly higher than Red (r)
         const isGreen = g > (r + 20) && g > 85;
         let pixelVal;
 
@@ -108,7 +158,7 @@ function createOcrCandidates(img) {
           pixelVal = 255; // White background for Tesseract OCR
         } else {
           const avg = (r + g + b) / 3;
-          pixelVal = avg > 120 ? 0 : 255; // White embossed text -> Black text for Tesseract
+          pixelVal = avg > 120 ? 0 : 255; // White text -> Black text for Tesseract
         }
 
         d[i] = pixelVal;
@@ -123,6 +173,7 @@ function createOcrCandidates(img) {
     }
   };
 
+  // Pass 3: Standard Contrast Pass
   const createStandardCandidate = (cropX, cropY, cropW, cropH, contrastBoost = 1.5) => {
     try {
       const canvas = document.createElement('canvas');
@@ -165,19 +216,23 @@ function createOcrCandidates(img) {
     }
   };
 
-  // 1. EV Green Plate Pass
+  // 1. Commercial Taxi Yellow Pass
+  const yellowCand = createYellowTaxiCandidate(0.02, 0.25, 0.96, 0.70);
+  if (yellowCand) candidates.push(yellowCand);
+
+  // 2. EV Green Plate Pass
   const evCand = createEvCandidate(0.02, 0.20, 0.96, 0.75);
   if (evCand) candidates.push(evCand);
 
-  // 2. Lower Bumper Standard Pass (30% to 100% height)
+  // 3. Lower Bumper Standard Pass (30% to 100% height)
   const cand1 = createStandardCandidate(0.02, 0.30, 0.96, 0.68, 1.8);
   if (cand1) candidates.push(cand1);
 
-  // 3. Middle Region Pass (20% to 80% height)
+  // 4. Middle Region Pass (20% to 80% height)
   const cand2 = createStandardCandidate(0.05, 0.20, 0.90, 0.60, 1.5);
   if (cand2) candidates.push(cand2);
 
-  // 4. Full Photo
+  // 5. Full Photo Pass
   const cand3 = createStandardCandidate(0, 0, 1.0, 1.0, 1.2);
   if (cand3) candidates.push(cand3);
 
