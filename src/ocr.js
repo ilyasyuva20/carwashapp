@@ -27,7 +27,7 @@ function repairPlateString(str) {
     let stateFixed = state.split('').map(ch => digitToLetter[ch] || ch).join('');
     if (stateFixed === 'KE' || stateFixed === 'KI' || stateFixed === 'K1') stateFixed = 'KL';
     else if (!INDIAN_STATES.includes(stateFixed)) {
-      if (stateFixed.startsWith('K')) stateFixed = 'KL';
+      if (stateFixed.startsWith('K')) stateFixed = 'KA'; // Common for KA self-drive
       else if (stateFixed.startsWith('M')) stateFixed = 'MH';
       else if (stateFixed.startsWith('D')) stateFixed = 'DL';
       else if (stateFixed.startsWith('T')) stateFixed = 'TN';
@@ -65,17 +65,62 @@ function repairPlateString(str) {
 
 /**
  * Creates candidate image passes optimized for all Indian license plate formats:
- * Pass 1: Weathered / Sticker Plate Filter (removes rust, screws, bullet dots & underlines)
- * Pass 2: Commercial Taxi (Yellow Background, Black Text)
- * Pass 3: Electric Vehicle (Green Background, White Embossed Text)
- * Pass 4: Standard Private Vehicle Bumper Pass (White Background, Black Text)
- * Pass 5: Middle Region Pass
- * Pass 6: Full Photo Pass
+ * Pass 1: Self-Drive Rental Plate (Black Background, Yellow Text)
+ * Pass 2: Weathered / Sticker Plate Filter (removes rust, screws, bullet dots & underlines)
+ * Pass 3: Commercial Taxi (Yellow Background, Black Text)
+ * Pass 4: Electric Vehicle (Green Background, White Embossed Text)
+ * Pass 5: Standard Private Vehicle Bumper Pass (White Background, Black Text)
+ * Pass 6: Middle Region Pass
+ * Pass 7: Full Photo Pass
  */
 function createOcrCandidates(img) {
   const candidates = [];
 
-  // Pass 1: Weathered & Sticker Font Adaptive Binarization (Removes rust, screws, green bullet dots, underlines)
+  // Pass 1: Self-Drive Commercial Rental Extractor (Black Background, Yellow Text)
+  const createSelfDriveRentalCandidate = (cropX, cropY, cropW, cropH) => {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const srcX = Math.round(img.width * cropX);
+      const srcY = Math.round(img.height * cropY);
+      const srcW = Math.round(img.width * cropW);
+      const srcH = Math.round(img.height * cropH);
+
+      const targetW = Math.min(1000, srcW);
+      const targetH = Math.round((srcH * targetW) / srcW);
+
+      canvas.width = targetW;
+      canvas.height = targetH;
+
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetW, targetH);
+
+      const imgData = ctx.getImageData(0, 0, targetW, targetH);
+      const d = imgData.data;
+
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i];
+        const g = d[i + 1];
+        const b = d[i + 2];
+
+        // Self-drive rental plates have Yellow text (high R & G, low B) on Black background
+        const isYellowText = r > 125 && g > 105 && (r - b > 30) && (g - b > 20);
+
+        let pixelVal = isYellowText ? 0 : 255; // Yellow text -> Black text (0), Black plate -> White canvas (255)
+
+        d[i] = pixelVal;
+        d[i + 1] = pixelVal;
+        d[i + 2] = pixelVal;
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+      return canvas.toDataURL('image/jpeg', 0.95);
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Pass 2: Weathered & Sticker Font Adaptive Binarization (Removes rust, screws, green bullet dots, underlines)
   const createStickerPlateCandidate = (cropX, cropY, cropW, cropH) => {
     try {
       const canvas = document.createElement('canvas');
@@ -118,7 +163,7 @@ function createOcrCandidates(img) {
     }
   };
 
-  // Pass 2: Commercial Taxi Yellow Plate Channel Extractor
+  // Pass 3: Commercial Taxi Yellow Plate Channel Extractor
   const createYellowTaxiCandidate = (cropX, cropY, cropW, cropH) => {
     try {
       const canvas = document.createElement('canvas');
@@ -167,7 +212,7 @@ function createOcrCandidates(img) {
     }
   };
 
-  // Pass 3: EV Green Plate Channel Extractor
+  // Pass 4: EV Green Plate Channel Extractor
   const createEvCandidate = (cropX, cropY, cropW, cropH) => {
     try {
       const canvas = document.createElement('canvas');
@@ -216,7 +261,7 @@ function createOcrCandidates(img) {
     }
   };
 
-  // Pass 4: Standard Contrast Pass
+  // Pass 5: Standard Contrast Pass
   const createStandardCandidate = (cropX, cropY, cropW, cropH, contrastBoost = 1.5) => {
     try {
       const canvas = document.createElement('canvas');
@@ -259,27 +304,31 @@ function createOcrCandidates(img) {
     }
   };
 
-  // 1. Weathered & Sticker Plate Pass
+  // 1. Self-Drive Rental Black Plate Pass (Yellow Text on Black Background)
+  const selfDriveCand = createSelfDriveRentalCandidate(0.02, 0.25, 0.96, 0.70);
+  if (selfDriveCand) candidates.push(selfDriveCand);
+
+  // 2. Weathered & Sticker Plate Pass
   const stickerCand = createStickerPlateCandidate(0.02, 0.20, 0.96, 0.75);
   if (stickerCand) candidates.push(stickerCand);
 
-  // 2. Commercial Taxi Yellow Pass
+  // 3. Commercial Taxi Yellow Pass
   const yellowCand = createYellowTaxiCandidate(0.02, 0.25, 0.96, 0.70);
   if (yellowCand) candidates.push(yellowCand);
 
-  // 3. EV Green Plate Pass
+  // 4. EV Green Plate Pass
   const evCand = createEvCandidate(0.02, 0.20, 0.96, 0.75);
   if (evCand) candidates.push(evCand);
 
-  // 4. Lower Bumper Standard Pass (30% to 100% height)
+  // 5. Lower Bumper Standard Pass (30% to 100% height)
   const cand1 = createStandardCandidate(0.02, 0.30, 0.96, 0.68, 1.8);
   if (cand1) candidates.push(cand1);
 
-  // 5. Middle Region Pass (20% to 80% height)
+  // 6. Middle Region Pass (20% to 80% height)
   const cand2 = createStandardCandidate(0.05, 0.20, 0.90, 0.60, 1.5);
   if (cand2) candidates.push(cand2);
 
-  // 6. Full Photo Pass
+  // 7. Full Photo Pass
   const cand3 = createStandardCandidate(0, 0, 1.0, 1.0, 1.2);
   if (cand3) candidates.push(cand3);
 
