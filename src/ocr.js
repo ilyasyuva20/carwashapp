@@ -8,6 +8,7 @@ const INDIAN_STATES = [
 
 const PLATE_REGEX_STRICT = /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$|^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$/;
 const PLATE_REGEX_SEARCH = /[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2}/;
+const PARTIAL_FOUR_DIGIT_REGEX = /[0-9]{4}/;
 
 /**
  * Position-based character repair for Indian License Plates:
@@ -143,7 +144,6 @@ function createOcrCandidates(img) {
       } else if (filterType === 'otsu-invert') {
         applyOtsuBinarization(imgData, true);
       } else if (filterType === 'ev') {
-        // Green background -> 255 (White), Characters + INDIA watermark -> 0 (Solid Black)
         for (let i = 0; i < d.length; i += 4) {
           const r = d[i], g = d[i + 1], b = d[i + 2];
           const isGreen = (g > 60) && (g - r > 15) && (g - b > 10);
@@ -151,7 +151,6 @@ function createOcrCandidates(img) {
           d[i] = val; d[i + 1] = val; d[i + 2] = val;
         }
       } else if (filterType === 'selfdrive') {
-        // Yellow text on black plate -> 0 (Solid Black text on White canvas)
         for (let i = 0; i < d.length; i += 4) {
           const r = d[i], g = d[i + 1], b = d[i + 2];
           const isYellow = (r > 115) && (g > 95) && (r - b > 25) && (g - b > 15);
@@ -159,7 +158,6 @@ function createOcrCandidates(img) {
           d[i] = val; d[i + 1] = val; d[i + 2] = val;
         }
       } else if (filterType === 'taxi') {
-        // Yellow background -> 255, Black text -> 0
         for (let i = 0; i < d.length; i += 4) {
           const r = d[i], g = d[i + 1], b = d[i + 2];
           const isYellowBg = (r > 130) && (g > 110) && (r - b > 30) && (g - b > 20);
@@ -183,31 +181,16 @@ function createOcrCandidates(img) {
     }
   };
 
-  // Spatial Crops:
-  // Bumper Center: x:0.15, y:0.35, w:0.70, h:0.60
-  // Tight / Close-up: x:0.02, y:0.05, w:0.96, h:0.90
-  // Full Frame: x:0.0, y:0.0, w:1.0, h:1.0
-
-  // 1. Otsu Adaptive Binarization (Standard & High-Contrast Plates)
+  // Passes
   candidates.push({ name: 'Otsu-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, 'otsu') });
   candidates.push({ name: 'Otsu-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, 'otsu') });
-
-  // 2. EV Green Plate Passes
   candidates.push({ name: 'EV-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, 'ev') });
   candidates.push({ name: 'EV-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, 'ev') });
-
-  // 3. Self-Drive Rental Passes (Yellow on Black)
   candidates.push({ name: 'SelfDrive-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, 'selfdrive') });
   candidates.push({ name: 'SelfDrive-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, 'selfdrive') });
-
-  // 4. Commercial Taxi Passes (Black on Yellow)
   candidates.push({ name: 'Taxi-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, 'taxi') });
   candidates.push({ name: 'Taxi-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, 'taxi') });
-
-  // 5. Inverted Otsu Pass (For Light-on-Dark Plates)
   candidates.push({ name: 'Otsu-Invert-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, 'otsu-invert') });
-
-  // 6. Grayscale Contrast Pass
   candidates.push({ name: 'Contrast-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, 'contrast') });
   candidates.push({ name: 'Contrast-Full', data: processCrop(0, 0, 1.0, 1.0, 'contrast') });
 
@@ -221,26 +204,26 @@ function parsePlateFromTesseractData(data) {
 
   const fullClean = (data?.text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-  // 1. Direct Regex Match on full clean text
+  // 1. Direct Regex Match on full clean text (e.g. KL43S7965 or KA03AB6252)
   let m = fullClean.match(PLATE_REGEX_SEARCH);
-  if (m) return m[0];
+  if (m) return { plate: m[0], isFullMatch: true };
 
   // 2. Individual Line Match
   for (const line of lines) {
     let lm = line.match(PLATE_REGEX_SEARCH);
-    if (lm) return lm[0];
+    if (lm) return { plate: lm[0], isFullMatch: true };
   }
 
   // 3. Consecutive Line Combination (Two-line scooter plates like KL 32 \n H 2920)
   for (let i = 0; i < lines.length - 1; i++) {
     const combined = lines[i] + lines[i + 1];
     let cm = combined.match(PLATE_REGEX_SEARCH);
-    if (cm) return cm[0];
+    if (cm) return { plate: cm[0], isFullMatch: true };
 
     if (i < lines.length - 2) {
       const combined3 = lines[i] + lines[i + 1] + lines[i + 2];
       let cm3 = combined3.match(PLATE_REGEX_SEARCH);
-      if (cm3) return cm3[0];
+      if (cm3) return { plate: cm3[0], isFullMatch: true };
     }
   }
 
@@ -249,11 +232,22 @@ function parsePlateFromTesseractData(data) {
   for (const chunk of chunks) {
     const repaired = repairPlateString(chunk);
     if (PLATE_REGEX_STRICT.test(repaired)) {
-      return repaired;
+      return { plate: repaired, isFullMatch: true };
     }
   }
 
-  return '';
+  // 5. Fallback Extraction: Extract 4-Digit Registration Number (e.g., "7965" or "KL437965")
+  const digit4Match = fullClean.match(PARTIAL_FOUR_DIGIT_REGEX);
+  if (digit4Match) {
+    // If state code pre-exists (e.g. KL437965 or KL7965), keep it
+    const partialWithState = fullClean.match(/[A-Z]{2}[0-9]{0,4}[0-9]{4}/);
+    if (partialWithState) {
+      return { plate: partialWithState[0], isFullMatch: false };
+    }
+    return { plate: digit4Match[0], isFullMatch: false };
+  }
+
+  return { plate: '', isFullMatch: false };
 }
 
 /**
@@ -280,17 +274,30 @@ export async function recognizePlateNumber(imageSource) {
       tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -',
     });
 
+    let bestPartial = '';
+
     for (const candidate of candidates) {
       const result = await worker.recognize(candidate.data);
-      const plate = parsePlateFromTesseractData(result.data);
-      if (plate) {
-        console.log(`[OCR SUCCESS] Matched plate '${plate}' on candidate: ${candidate.name}`);
+      const parsed = parsePlateFromTesseractData(result.data);
+
+      if (parsed.isFullMatch && parsed.plate) {
+        console.log(`[OCR SUCCESS - FULL MATCH] Matched plate '${parsed.plate}' on candidate: ${candidate.name}`);
         await worker.terminate();
-        return plate;
+        return parsed.plate;
+      }
+
+      if (!bestPartial && parsed.plate) {
+        bestPartial = parsed.plate; // Store 4-digit partial number (e.g. 7965 or KL437965)
       }
     }
 
     await worker.terminate();
+
+    if (bestPartial) {
+      console.log(`[OCR SUCCESS - PARTIAL 4-DIGIT MATCH] Extracted digits '${bestPartial}'`);
+      return bestPartial;
+    }
+
     throw new Error('Plate number could not be read clearly. Please type registration manually.');
   } catch (err) {
     if (worker) {
