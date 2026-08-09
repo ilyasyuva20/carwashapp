@@ -1,4 +1,5 @@
 import { createWorker } from 'tesseract.js';
+import { api } from './api';
 
 const INDIAN_STATES = [
   'AP', 'AR', 'AS', 'BR', 'CG', 'CH', 'DD', 'DL', 'DN', 'GA', 'GJ', 'HR',
@@ -204,17 +205,14 @@ function parsePlateFromTesseractData(data) {
 
   const fullClean = (data?.text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-  // 1. Direct Regex Match on full clean text (e.g. KL43S7965 or KA03AB6252)
   let m = fullClean.match(PLATE_REGEX_SEARCH);
   if (m) return { plate: m[0], isFullMatch: true };
 
-  // 2. Individual Line Match
   for (const line of lines) {
     let lm = line.match(PLATE_REGEX_SEARCH);
     if (lm) return { plate: lm[0], isFullMatch: true };
   }
 
-  // 3. Consecutive Line Combination (Two-line scooter plates like KL 32 \n H 2920)
   for (let i = 0; i < lines.length - 1; i++) {
     const combined = lines[i] + lines[i + 1];
     let cm = combined.match(PLATE_REGEX_SEARCH);
@@ -227,7 +225,6 @@ function parsePlateFromTesseractData(data) {
     }
   }
 
-  // 4. Try Position Repair on 8-11 character chunks
   const chunks = fullClean.match(/[A-Z0-9]{8,11}/g) || [];
   for (const chunk of chunks) {
     const repaired = repairPlateString(chunk);
@@ -236,10 +233,8 @@ function parsePlateFromTesseractData(data) {
     }
   }
 
-  // 5. Fallback Extraction: Extract 4-Digit Registration Number (e.g., "7965" or "KL437965")
   const digit4Match = fullClean.match(PARTIAL_FOUR_DIGIT_REGEX);
   if (digit4Match) {
-    // If state code pre-exists (e.g. KL437965 or KL7965), keep it
     const partialWithState = fullClean.match(/[A-Z]{2}[0-9]{0,4}[0-9]{4}/);
     if (partialWithState) {
       return { plate: partialWithState[0], isFullMatch: false };
@@ -251,22 +246,66 @@ function parsePlateFromTesseractData(data) {
 }
 
 /**
- * Extracts Indian vehicle registration number from an image file using in-browser Tesseract.js.
+ * Helper to convert Image / File / Blob into base64 URL
+ */
+function getImageBase64(img) {
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  return canvas.toDataURL('image/jpeg', 0.90);
+}
+
+/**
+ * Extracts Indian vehicle registration number from an image file using AI Vision API with fallback to Tesseract.js.
  */
 export async function recognizePlateNumber(imageSource) {
-  let worker = null;
+  let img = null;
+  let base64Image = '';
+
   try {
-    const img = new Image();
+    img = new Image();
     img.crossOrigin = 'anonymous';
 
     await new Promise((res, rej) => {
       img.onload = res;
       img.onerror = rej;
-      if (typeof imageSource === 'string') img.src = imageSource;
-      else if (imageSource instanceof File || imageSource instanceof Blob) img.src = URL.createObjectURL(imageSource);
-      else res();
+      if (typeof imageSource === 'string') {
+        img.src = imageSource;
+        base64Image = imageSource;
+      } else if (imageSource instanceof File || imageSource instanceof Blob) {
+        const url = URL.createObjectURL(imageSource);
+        img.src = url;
+      } else {
+        res();
+      }
     });
 
+    if (!base64Image && img.width > 0) {
+      base64Image = getImageBase64(img);
+    }
+
+    // 1. Primary AI Vision OCR Server API Request (Engine 2 Deep Learning)
+    if (base64Image) {
+      try {
+        console.log('[OCR] Requesting AI Vision OCR Server API...');
+        const apiResult = await api.post('/ocr/scan', { image: base64Image });
+        if (apiResult && apiResult.success && apiResult.plate) {
+          console.log(`[AI VISION OCR SUCCESS] Matched plate '${apiResult.plate}'`);
+          return apiResult.plate;
+        }
+      } catch (apiErr) {
+        console.warn('[OCR AI API Warn] Server scan failed/offline, falling back to browser Tesseract:', apiErr.message);
+      }
+    }
+  } catch (e) {
+    console.warn('[OCR Base64 Conversion Warn]:', e);
+  }
+
+  // 2. Secondary Browser Tesseract Worker Fallback
+  let worker = null;
+  try {
     const candidates = createOcrCandidates(img);
 
     worker = await createWorker('eng');
@@ -281,20 +320,20 @@ export async function recognizePlateNumber(imageSource) {
       const parsed = parsePlateFromTesseractData(result.data);
 
       if (parsed.isFullMatch && parsed.plate) {
-        console.log(`[OCR SUCCESS - FULL MATCH] Matched plate '${parsed.plate}' on candidate: ${candidate.name}`);
+        console.log(`[OCR SUCCESS - TESSERACT] Matched plate '${parsed.plate}' on candidate: ${candidate.name}`);
         await worker.terminate();
         return parsed.plate;
       }
 
       if (!bestPartial && parsed.plate) {
-        bestPartial = parsed.plate; // Store 4-digit partial number (e.g. 7965 or KL437965)
+        bestPartial = parsed.plate;
       }
     }
 
     await worker.terminate();
 
     if (bestPartial) {
-      console.log(`[OCR SUCCESS - PARTIAL 4-DIGIT MATCH] Extracted digits '${bestPartial}'`);
+      console.log(`[OCR SUCCESS - TESSERACT 4-DIGIT] Extracted '${bestPartial}'`);
       return bestPartial;
     }
 
