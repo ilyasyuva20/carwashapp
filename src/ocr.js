@@ -64,15 +64,17 @@ function repairPlateString(str) {
 }
 
 /**
- * Creates 3 candidate image passes for OCR:
- * Pass 1: Lower Bumper Region (30% to 100% height - optimal for full vehicle shots like red Tata car)
- * Pass 2: Middle Region (20% to 80% height)
- * Pass 3: Full Image
+ * Creates candidate image passes for OCR:
+ * Pass 1: EV Green Plate Channel Extractor (converts green EV plate background to white & text to crisp black)
+ * Pass 2: Lower Bumper Region Contrast Pass
+ * Pass 3: Middle Region Pass
+ * Pass 4: Full Photo Pass
  */
 function createOcrCandidates(img) {
   const candidates = [];
 
-  const createCandidate = (cropX, cropY, cropW, cropH, contrastBoost = 1.5) => {
+  // Pass 1: EV Green Plate Channel Extractor
+  const createEvCandidate = (cropX, cropY, cropW, cropH) => {
     try {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -93,7 +95,55 @@ function createOcrCandidates(img) {
       const imgData = ctx.getImageData(0, 0, targetW, targetH);
       const d = imgData.data;
 
-      // Apply contrast sharpening
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i];
+        const g = d[i + 1];
+        const b = d[i + 2];
+
+        // Green EV plate background has Green (g) significantly higher than Red (r)
+        const isGreen = g > (r + 20) && g > 85;
+        let pixelVal;
+
+        if (isGreen) {
+          pixelVal = 255; // White background for Tesseract OCR
+        } else {
+          const avg = (r + g + b) / 3;
+          pixelVal = avg > 120 ? 0 : 255; // White embossed text -> Black text for Tesseract
+        }
+
+        d[i] = pixelVal;
+        d[i + 1] = pixelVal;
+        d[i + 2] = pixelVal;
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+      return canvas.toDataURL('image/jpeg', 0.95);
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const createStandardCandidate = (cropX, cropY, cropW, cropH, contrastBoost = 1.5) => {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const srcX = Math.round(img.width * cropX);
+      const srcY = Math.round(img.height * cropY);
+      const srcW = Math.round(img.width * cropW);
+      const srcH = Math.round(img.height * cropH);
+
+      const targetW = Math.min(1000, srcW);
+      const targetH = Math.round((srcH * targetW) / srcW);
+
+      canvas.width = targetW;
+      canvas.height = targetH;
+
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetW, targetH);
+
+      const imgData = ctx.getImageData(0, 0, targetW, targetH);
+      const d = imgData.data;
+
       for (let i = 0; i < d.length; i += 4) {
         const r = d[i];
         const g = d[i + 1];
@@ -115,16 +165,20 @@ function createOcrCandidates(img) {
     }
   };
 
-  // Pass 1: Lower Bumper Crop (30% to 100% height)
-  const cand1 = createCandidate(0.02, 0.30, 0.96, 0.68, 1.8);
+  // 1. EV Green Plate Pass
+  const evCand = createEvCandidate(0.02, 0.20, 0.96, 0.75);
+  if (evCand) candidates.push(evCand);
+
+  // 2. Lower Bumper Standard Pass (30% to 100% height)
+  const cand1 = createStandardCandidate(0.02, 0.30, 0.96, 0.68, 1.8);
   if (cand1) candidates.push(cand1);
 
-  // Pass 2: Middle Region Crop (20% to 80% height)
-  const cand2 = createCandidate(0.05, 0.20, 0.90, 0.60, 1.5);
+  // 3. Middle Region Pass (20% to 80% height)
+  const cand2 = createStandardCandidate(0.05, 0.20, 0.90, 0.60, 1.5);
   if (cand2) candidates.push(cand2);
 
-  // Pass 3: Full Photo
-  const cand3 = createCandidate(0, 0, 1.0, 1.0, 1.2);
+  // 4. Full Photo
+  const cand3 = createStandardCandidate(0, 0, 1.0, 1.0, 1.2);
   if (cand3) candidates.push(cand3);
 
   return candidates;
@@ -147,7 +201,7 @@ function parsePlateFromTesseractData(data) {
     if (lm) return lm[0];
   }
 
-  // 3. Consecutive Line Combination (Two-line scooter/bike plates)
+  // 3. Consecutive Line Combination (Two-line scooter/bike plates like KL 43 \n S 9064)
   for (let i = 0; i < lines.length - 1; i++) {
     const combined = lines[i] + lines[i + 1];
     let cm = combined.match(PLATE_REGEX_SEARCH);
