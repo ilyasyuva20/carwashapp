@@ -16,6 +16,14 @@ function getTodayDateString() {
   return `${year}-${month}-${day}`;
 }
 
+function getImageUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  return `https://carwashapp-xwz9.onrender.com${url}`;
+}
+
 function formatDateOnly(isoString) {
   if (!isoString) return '';
   const d = new Date(isoString);
@@ -359,8 +367,8 @@ export default function Jobs() {
                         <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                           <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>📷</span>
                           {j.before_photos.map((pUrl, pIdx) => (
-                            <a key={pIdx} href={pUrl} target="_blank" rel="noreferrer" title="Click to view pre-wash photo">
-                              <img src={pUrl} alt="Before" style={{ width: 26, height: 26, borderRadius: 4, objectFit: 'cover', border: '1px solid #cbd5e1' }} />
+                            <a key={pIdx} href={getImageUrl(pUrl)} target="_blank" rel="noreferrer" title="Click to view pre-wash photo">
+                              <img src={getImageUrl(pUrl)} alt="Before" style={{ width: 26, height: 26, borderRadius: 4, objectFit: 'cover', border: '1px solid #cbd5e1' }} />
                             </a>
                           ))}
                         </div>

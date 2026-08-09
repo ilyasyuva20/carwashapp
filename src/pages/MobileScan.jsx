@@ -3,6 +3,50 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { recognizePlateNumber } from '../ocr';
 
+function compressImage(file, maxWidth = 1000, maxHeight = 1000, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = (err) => reject(err);
+      img.src = e.target.result;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
+function getImageUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  return `https://carwashapp-xwz9.onrender.com${url}`;
+}
+
 export default function MobileScan() {
   const navigate = useNavigate();
 
@@ -103,16 +147,12 @@ export default function MobileScan() {
     if (!file) return;
     setUploadingPhoto(true);
     try {
-      const formData = new FormData();
-      formData.append('photo', file);
-      const res = await api.postForm('/jobs/upload-before-photo', formData);
-      if (res && res.url) {
-        setBeforePhotos(prev => {
-          const next = [...prev];
-          next[slotIndex] = res.url;
-          return next;
-        });
-      }
+      const compressedUrl = await compressImage(file);
+      setBeforePhotos(prev => {
+        const next = [...prev];
+        next[slotIndex] = compressedUrl;
+        return next;
+      });
     } catch (err) {
       console.error('Photo upload failed:', err);
     } finally {
@@ -449,7 +489,7 @@ export default function MobileScan() {
                     <div key={slot} style={{ position: 'relative', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', border: '1.5px dashed var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {photoUrl ? (
                         <>
-                          <img src={photoUrl} alt={`Before ${slot + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <img src={getImageUrl(photoUrl)} alt={`Before ${slot + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           <button
                             type="button"
                             onClick={() => removeBeforePhoto(slot)}

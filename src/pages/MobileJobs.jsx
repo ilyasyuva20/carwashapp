@@ -22,6 +22,14 @@ function getElapsedMinutes(dateStr) {
   return Math.floor(diffMs / 60000);
 }
 
+function getImageUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  return `https://carwashapp-xwz9.onrender.com${url}`;
+}
+
 export default function MobileJobs() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -166,9 +174,9 @@ export default function MobileJobs() {
                         </div>
                         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
                           {job.before_photos.map((pUrl, idx) => (
-                            <a key={idx} href={pUrl} target="_blank" rel="noreferrer" title="Click to view full photo">
+                            <a key={idx} href={getImageUrl(pUrl)} target="_blank" rel="noreferrer" title="Click to view full photo">
                               <img
-                                src={pUrl}
+                                src={getImageUrl(pUrl)}
                                 alt={`Before ${idx + 1}`}
                                 style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover', border: '1px solid #cbd5e1' }}
                               />
