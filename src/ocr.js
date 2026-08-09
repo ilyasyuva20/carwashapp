@@ -65,16 +65,60 @@ function repairPlateString(str) {
 
 /**
  * Creates candidate image passes optimized for all Indian license plate formats:
- * Pass 1: Commercial Taxi (Yellow Background, Black Text)
- * Pass 2: Electric Vehicle (Green Background, White Embossed Text)
- * Pass 3: Standard Private Vehicle Bumper Pass (White Background, Black Text)
- * Pass 4: Middle Region Pass
- * Pass 5: Full Photo Pass
+ * Pass 1: Weathered / Sticker Plate Filter (removes rust, screws, bullet dots & underlines)
+ * Pass 2: Commercial Taxi (Yellow Background, Black Text)
+ * Pass 3: Electric Vehicle (Green Background, White Embossed Text)
+ * Pass 4: Standard Private Vehicle Bumper Pass (White Background, Black Text)
+ * Pass 5: Middle Region Pass
+ * Pass 6: Full Photo Pass
  */
 function createOcrCandidates(img) {
   const candidates = [];
 
-  // Pass 1: Commercial Taxi Yellow Plate Channel Extractor
+  // Pass 1: Weathered & Sticker Font Adaptive Binarization (Removes rust, screws, green bullet dots, underlines)
+  const createStickerPlateCandidate = (cropX, cropY, cropW, cropH) => {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const srcX = Math.round(img.width * cropX);
+      const srcY = Math.round(img.height * cropY);
+      const srcW = Math.round(img.width * cropW);
+      const srcH = Math.round(img.height * cropH);
+
+      const targetW = Math.min(1000, srcW);
+      const targetH = Math.round((srcH * targetW) / srcW);
+
+      canvas.width = targetW;
+      canvas.height = targetH;
+
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetW, targetH);
+
+      const imgData = ctx.getImageData(0, 0, targetW, targetH);
+      const d = imgData.data;
+
+      // Dark bold sticker letters have luminance < 75; rust/dust/screws/plate background have luminance >= 75
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i];
+        const g = d[i + 1];
+        const b = d[i + 2];
+        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+
+        const pixelVal = luminance < 75 ? 0 : 255; // Solid black text, pure white canvas
+
+        d[i] = pixelVal;
+        d[i + 1] = pixelVal;
+        d[i + 2] = pixelVal;
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+      return canvas.toDataURL('image/jpeg', 0.95);
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Pass 2: Commercial Taxi Yellow Plate Channel Extractor
   const createYellowTaxiCandidate = (cropX, cropY, cropW, cropH) => {
     try {
       const canvas = document.createElement('canvas');
@@ -101,15 +145,14 @@ function createOcrCandidates(img) {
         const g = d[i + 1];
         const b = d[i + 2];
 
-        // Yellow plate background has high Red & Green, low Blue
         const isYellowBg = r > 130 && g > 110 && (r - b > 35) && (g - b > 25);
         const isDarkText = r < 100 && g < 100 && b < 100;
 
-        let pixelVal = 255; // Default white canvas background
+        let pixelVal = 255;
         if (isDarkText) {
-          pixelVal = 0; // Solid black text for Tesseract
+          pixelVal = 0;
         } else if (isYellowBg) {
-          pixelVal = 255; // Yellow background -> White canvas
+          pixelVal = 255;
         }
 
         d[i] = pixelVal;
@@ -124,7 +167,7 @@ function createOcrCandidates(img) {
     }
   };
 
-  // Pass 2: EV Green Plate Channel Extractor
+  // Pass 3: EV Green Plate Channel Extractor
   const createEvCandidate = (cropX, cropY, cropW, cropH) => {
     try {
       const canvas = document.createElement('canvas');
@@ -155,10 +198,10 @@ function createOcrCandidates(img) {
         let pixelVal;
 
         if (isGreen) {
-          pixelVal = 255; // White background for Tesseract OCR
+          pixelVal = 255;
         } else {
           const avg = (r + g + b) / 3;
-          pixelVal = avg > 120 ? 0 : 255; // White text -> Black text for Tesseract
+          pixelVal = avg > 120 ? 0 : 255;
         }
 
         d[i] = pixelVal;
@@ -173,7 +216,7 @@ function createOcrCandidates(img) {
     }
   };
 
-  // Pass 3: Standard Contrast Pass
+  // Pass 4: Standard Contrast Pass
   const createStandardCandidate = (cropX, cropY, cropW, cropH, contrastBoost = 1.5) => {
     try {
       const canvas = document.createElement('canvas');
@@ -216,23 +259,27 @@ function createOcrCandidates(img) {
     }
   };
 
-  // 1. Commercial Taxi Yellow Pass
+  // 1. Weathered & Sticker Plate Pass
+  const stickerCand = createStickerPlateCandidate(0.02, 0.20, 0.96, 0.75);
+  if (stickerCand) candidates.push(stickerCand);
+
+  // 2. Commercial Taxi Yellow Pass
   const yellowCand = createYellowTaxiCandidate(0.02, 0.25, 0.96, 0.70);
   if (yellowCand) candidates.push(yellowCand);
 
-  // 2. EV Green Plate Pass
+  // 3. EV Green Plate Pass
   const evCand = createEvCandidate(0.02, 0.20, 0.96, 0.75);
   if (evCand) candidates.push(evCand);
 
-  // 3. Lower Bumper Standard Pass (30% to 100% height)
+  // 4. Lower Bumper Standard Pass (30% to 100% height)
   const cand1 = createStandardCandidate(0.02, 0.30, 0.96, 0.68, 1.8);
   if (cand1) candidates.push(cand1);
 
-  // 4. Middle Region Pass (20% to 80% height)
+  // 5. Middle Region Pass (20% to 80% height)
   const cand2 = createStandardCandidate(0.05, 0.20, 0.90, 0.60, 1.5);
   if (cand2) candidates.push(cand2);
 
-  // 5. Full Photo Pass
+  // 6. Full Photo Pass
   const cand3 = createStandardCandidate(0, 0, 1.0, 1.0, 1.2);
   if (cand3) candidates.push(cand3);
 
@@ -256,7 +303,7 @@ function parsePlateFromTesseractData(data) {
     if (lm) return lm[0];
   }
 
-  // 3. Consecutive Line Combination (Two-line scooter/bike plates like KL 43 \n S 9064)
+  // 3. Consecutive Line Combination (Two-line scooter/bike plates like KL 32 \n H 2920)
   for (let i = 0; i < lines.length - 1; i++) {
     const combined = lines[i] + lines[i + 1];
     let cm = combined.match(PLATE_REGEX_SEARCH);
