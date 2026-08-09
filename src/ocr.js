@@ -27,7 +27,7 @@ function repairPlateString(str) {
     let stateFixed = state.split('').map(ch => digitToLetter[ch] || ch).join('');
     if (stateFixed === 'KE' || stateFixed === 'KI' || stateFixed === 'K1') stateFixed = 'KL';
     else if (!INDIAN_STATES.includes(stateFixed)) {
-      if (stateFixed.startsWith('K')) stateFixed = 'KA'; // Common for KA self-drive / KL plates
+      if (stateFixed.startsWith('K')) stateFixed = 'KL';
       else if (stateFixed.startsWith('M')) stateFixed = 'MH';
       else if (stateFixed.startsWith('D')) stateFixed = 'DL';
       else if (stateFixed.startsWith('T')) stateFixed = 'TN';
@@ -37,10 +37,8 @@ function repairPlateString(str) {
     }
 
     const rest = clean.slice(2);
-    // Last 4 characters must be digits
     let last4 = rest.slice(-4).split('').map(ch => letterToDigit[ch] || ch).join('');
     
-    // Middle: district digits (1-2) + series letters (1-2)
     let middle = rest.slice(0, -4);
     let dist = '';
     let series = '';
@@ -64,13 +62,62 @@ function repairPlateString(str) {
 }
 
 /**
- * Generates image canvas passes optimized for EV green plates, Self-drive black plates, Yellow taxis, and Sticker plates.
+ * Calculates optimal threshold automatically using Otsu's Binarization algorithm.
+ */
+function applyOtsuBinarization(imgData, invert = false) {
+  const d = imgData.data;
+  const histogram = new Array(256).fill(0);
+  const total = d.length / 4;
+
+  for (let i = 0; i < d.length; i += 4) {
+    const gray = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+    histogram[gray]++;
+  }
+
+  let sum = 0;
+  for (let t = 0; t < 256; t++) sum += t * histogram[t];
+
+  let sumB = 0;
+  let wB = 0;
+  let wF = 0;
+  let varMax = 0;
+  let threshold = 128;
+
+  for (let t = 0; t < 256; t++) {
+    wB += histogram[t];
+    if (wB === 0) continue;
+    wF = total - wB;
+    if (wF === 0) break;
+
+    sumB += t * histogram[t];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const varBetween = wB * wF * (mB - mF) * (mB - mF);
+
+    if (varBetween > varMax) {
+      varMax = varBetween;
+      threshold = t;
+    }
+  }
+
+  for (let i = 0; i < d.length; i += 4) {
+    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    let val = gray < threshold ? 0 : 255;
+    if (invert) val = 255 - val;
+
+    d[i] = val;
+    d[i + 1] = val;
+    d[i + 2] = val;
+  }
+}
+
+/**
+ * Multi-pass candidate generator with Otsu Binarization & Color Channel Filters.
  */
 function createOcrCandidates(img) {
   const candidates = [];
 
-  // Helper to draw crop & process pixels
-  const processCrop = (cropX, cropY, cropW, cropH, pixelFilter) => {
+  const processCrop = (cropX, cropY, cropW, cropH, filterType) => {
     try {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -91,11 +138,42 @@ function createOcrCandidates(img) {
       const imgData = ctx.getImageData(0, 0, targetW, targetH);
       const d = imgData.data;
 
-      for (let i = 0; i < d.length; i += 4) {
-        const pixelVal = pixelFilter(d[i], d[i + 1], d[i + 2]);
-        d[i] = pixelVal;
-        d[i + 1] = pixelVal;
-        d[i + 2] = pixelVal;
+      if (filterType === 'otsu') {
+        applyOtsuBinarization(imgData, false);
+      } else if (filterType === 'otsu-invert') {
+        applyOtsuBinarization(imgData, true);
+      } else if (filterType === 'ev') {
+        // Green background -> 255 (White), Characters + INDIA watermark -> 0 (Solid Black)
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i], g = d[i + 1], b = d[i + 2];
+          const isGreen = (g > 60) && (g - r > 15) && (g - b > 10);
+          const val = isGreen ? 255 : 0;
+          d[i] = val; d[i + 1] = val; d[i + 2] = val;
+        }
+      } else if (filterType === 'selfdrive') {
+        // Yellow text on black plate -> 0 (Solid Black text on White canvas)
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i], g = d[i + 1], b = d[i + 2];
+          const isYellow = (r > 115) && (g > 95) && (r - b > 25) && (g - b > 15);
+          const val = isYellow ? 0 : 255;
+          d[i] = val; d[i + 1] = val; d[i + 2] = val;
+        }
+      } else if (filterType === 'taxi') {
+        // Yellow background -> 255, Black text -> 0
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i], g = d[i + 1], b = d[i + 2];
+          const isYellowBg = (r > 130) && (g > 110) && (r - b > 30) && (g - b > 20);
+          const isDarkText = (r < 100) && (g < 100) && (b < 100);
+          const val = isDarkText ? 0 : (isYellowBg ? 255 : 255);
+          d[i] = val; d[i + 1] = val; d[i + 2] = val;
+        }
+      } else if (filterType === 'contrast') {
+        for (let i = 0; i < d.length; i += 4) {
+          let gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          gray = (gray - 128) * 1.6 + 128;
+          gray = Math.max(0, Math.min(255, gray));
+          d[i] = gray; d[i + 1] = gray; d[i + 2] = gray;
+        }
       }
 
       ctx.putImageData(imgData, 0, 0);
@@ -105,66 +183,33 @@ function createOcrCandidates(img) {
     }
   };
 
-  // 1. Filter: EV Green Plate (Green bg -> White canvas, Embossed characters + INDIA watermark -> Solid Black characters)
-  const evFilter = (r, g, b) => {
-    const isGreenBg = (g > 65) && (g - r > 18) && (g - b > 12);
-    return isGreenBg ? 255 : 0;
-  };
-
-  // 2. Filter: Self-Drive Commercial Rental (Yellow text on Black plate background)
-  const selfDriveFilter = (r, g, b) => {
-    const isYellowText = (r > 120) && (g > 100) && (r - b > 30) && (g - b > 20);
-    return isYellowText ? 0 : 255;
-  };
-
-  // 3. Filter: Commercial Taxi (Yellow background, Black text)
-  const taxiFilter = (r, g, b) => {
-    const isYellowBg = (r > 130) && (g > 110) && (r - b > 30) && (g - b > 20);
-    const isDarkText = (r < 100) && (g < 100) && (b < 100);
-    if (isDarkText) return 0;
-    if (isYellowBg) return 255;
-    return 255;
-  };
-
-  // 4. Filter: Weathered / Custom Sticker Plate (Adaptive Luminance)
-  const stickerFilter = (r, g, b) => {
-    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    return lum < 80 ? 0 : 255;
-  };
-
-  // 5. Filter: Standard Contrast Boost
-  const contrastFilter = (r, g, b) => {
-    let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-    gray = (gray - 128) * 1.6 + 128;
-    return Math.max(0, Math.min(255, gray));
-  };
-
   // Spatial Crops:
-  // Tight/Mid Crop (Good for Ather EV plates & close-ups): x:0.02, y:0.10, w:0.96, h:0.85
-  // Bumper Center Crop (Good for Mercedes full car photo): x:0.15, y:0.45, w:0.70, h:0.50
+  // Bumper Center: x:0.15, y:0.35, w:0.70, h:0.60
+  // Tight / Close-up: x:0.02, y:0.05, w:0.96, h:0.90
+  // Full Frame: x:0.0, y:0.0, w:1.0, h:1.0
 
-  // Pass 1: EV Green Plate (Tight Crop)
-  candidates.push({ name: 'EV-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, evFilter) });
-  // Pass 2: EV Green Plate (Bumper Center Crop)
-  candidates.push({ name: 'EV-Bumper', data: processCrop(0.15, 0.40, 0.70, 0.55, evFilter) });
+  // 1. Otsu Adaptive Binarization (Standard & High-Contrast Plates)
+  candidates.push({ name: 'Otsu-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, 'otsu') });
+  candidates.push({ name: 'Otsu-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, 'otsu') });
 
-  // Pass 3: Self-Drive Rental (Bumper Center Crop)
-  candidates.push({ name: 'SelfDrive-Bumper', data: processCrop(0.15, 0.45, 0.70, 0.50, selfDriveFilter) });
-  // Pass 4: Self-Drive Rental (Tight Crop)
-  candidates.push({ name: 'SelfDrive-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, selfDriveFilter) });
+  // 2. EV Green Plate Passes
+  candidates.push({ name: 'EV-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, 'ev') });
+  candidates.push({ name: 'EV-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, 'ev') });
 
-  // Pass 5: Commercial Taxi (Bumper Center Crop)
-  candidates.push({ name: 'Taxi-Bumper', data: processCrop(0.15, 0.40, 0.70, 0.55, taxiFilter) });
-  // Pass 6: Commercial Taxi (Tight Crop)
-  candidates.push({ name: 'Taxi-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, taxiFilter) });
+  // 3. Self-Drive Rental Passes (Yellow on Black)
+  candidates.push({ name: 'SelfDrive-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, 'selfdrive') });
+  candidates.push({ name: 'SelfDrive-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, 'selfdrive') });
 
-  // Pass 7: Weathered Sticker Plate (Tight Crop)
-  candidates.push({ name: 'Sticker-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, stickerFilter) });
+  // 4. Commercial Taxi Passes (Black on Yellow)
+  candidates.push({ name: 'Taxi-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, 'taxi') });
+  candidates.push({ name: 'Taxi-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, 'taxi') });
 
-  // Pass 8: Standard Contrast (Bumper Center Crop)
-  candidates.push({ name: 'Standard-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, contrastFilter) });
-  // Pass 9: Standard Contrast (Full Photo)
-  candidates.push({ name: 'Standard-Full', data: processCrop(0, 0, 1.0, 1.0, contrastFilter) });
+  // 5. Inverted Otsu Pass (For Light-on-Dark Plates)
+  candidates.push({ name: 'Otsu-Invert-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, 'otsu-invert') });
+
+  // 6. Grayscale Contrast Pass
+  candidates.push({ name: 'Contrast-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, 'contrast') });
+  candidates.push({ name: 'Contrast-Full', data: processCrop(0, 0, 1.0, 1.0, 'contrast') });
 
   return candidates.filter(c => c.data !== null);
 }
@@ -186,7 +231,7 @@ function parsePlateFromTesseractData(data) {
     if (lm) return lm[0];
   }
 
-  // 3. Consecutive Line Combination (Two-line scooter plates like Ather Rear KL43 \n S9064)
+  // 3. Consecutive Line Combination (Two-line scooter plates like KL 32 \n H 2920)
   for (let i = 0; i < lines.length - 1; i++) {
     const combined = lines[i] + lines[i + 1];
     let cm = combined.match(PLATE_REGEX_SEARCH);
@@ -239,7 +284,7 @@ export async function recognizePlateNumber(imageSource) {
       const result = await worker.recognize(candidate.data);
       const plate = parsePlateFromTesseractData(result.data);
       if (plate) {
-        console.log(`[OCR SUCCESS] Matched plate '${plate}' on pass: ${candidate.name}`);
+        console.log(`[OCR SUCCESS] Matched plate '${plate}' on candidate: ${candidate.name}`);
         await worker.terminate();
         return plate;
       }
