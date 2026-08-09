@@ -203,39 +203,38 @@ function parsePlateFromTesseractData(data) {
     .map(l => (l.text || '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
     .filter(Boolean);
 
-  const fullClean = (data?.text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const plateLinesOnly = lines.filter(l => l !== 'IND' && l !== 'INDIA' && l !== 'HERO' && l !== 'HONDA' && l !== 'ATHER' && l !== 'PALAL' && l !== 'MOBILITY');
 
-  let m = fullClean.match(PLATE_REGEX_SEARCH);
-  if (m) return { plate: m[0], isFullMatch: true };
-
-  for (const line of lines) {
+  for (const line of plateLinesOnly) {
     let lm = line.match(PLATE_REGEX_SEARCH);
     if (lm) return { plate: lm[0], isFullMatch: true };
+
+    let rep = repairPlateString(line);
+    if (PLATE_REGEX_STRICT.test(rep)) return { plate: rep, isFullMatch: true };
   }
 
-  for (let i = 0; i < lines.length - 1; i++) {
-    const combined = lines[i] + lines[i + 1];
+  for (let i = 0; i < plateLinesOnly.length - 1; i++) {
+    const combined = plateLinesOnly[i] + plateLinesOnly[i + 1];
     let cm = combined.match(PLATE_REGEX_SEARCH);
     if (cm) return { plate: cm[0], isFullMatch: true };
 
-    if (i < lines.length - 2) {
-      const combined3 = lines[i] + lines[i + 1] + lines[i + 2];
+    let rep = repairPlateString(combined);
+    if (PLATE_REGEX_STRICT.test(rep)) return { plate: rep, isFullMatch: true };
+
+    if (i < plateLinesOnly.length - 2) {
+      const combined3 = plateLinesOnly[i] + plateLinesOnly[i + 1] + plateLinesOnly[i + 2];
       let cm3 = combined3.match(PLATE_REGEX_SEARCH);
       if (cm3) return { plate: cm3[0], isFullMatch: true };
+
+      let rep3 = repairPlateString(combined3);
+      if (PLATE_REGEX_STRICT.test(rep3)) return { plate: rep3, isFullMatch: true };
     }
   }
 
-  const chunks = fullClean.match(/[A-Z0-9]{8,11}/g) || [];
-  for (const chunk of chunks) {
-    const repaired = repairPlateString(chunk);
-    if (PLATE_REGEX_STRICT.test(repaired)) {
-      return { plate: repaired, isFullMatch: true };
-    }
-  }
-
-  const digit4Match = fullClean.match(PARTIAL_FOUR_DIGIT_REGEX);
+  const combinedPlateText = plateLinesOnly.join('');
+  const digit4Match = combinedPlateText.match(PARTIAL_FOUR_DIGIT_REGEX);
   if (digit4Match) {
-    const partialWithState = fullClean.match(/[A-Z]{2}[0-9]{0,4}[0-9]{4}/);
+    const partialWithState = combinedPlateText.match(/[A-Z]{2}[0-9]{0,4}[0-9]{4}/);
     if (partialWithState) {
       return { plate: partialWithState[0], isFullMatch: false };
     }
