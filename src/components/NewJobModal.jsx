@@ -10,7 +10,10 @@ export default function NewJobModal({ onClose, onCreated }) {
   const [washTypeId, setWashTypeId] = useState('');
   const [hasChainLube, setHasChainLube] = useState(false);
 
-  // New Fields: Customer Type & Workshop & Payment Settlement
+  // New Fields: Customer Name & Customer Type & Workshop & Payment Settlement & Before Photos
+  const [customerName, setCustomerName] = useState('');
+  const [beforePhotos, setBeforePhotos] = useState([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [customerType, setCustomerType] = useState('normal'); // 'normal' | 'workshop'
   const [workshopId, setWorkshopId] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('unsettled'); // 'unsettled' | 'settled'
@@ -23,21 +26,42 @@ export default function NewJobModal({ onClose, onCreated }) {
     if (customerType === 'workshop') {
       url += `?workshop_id=${workshopId || 0}`;
     }
-    api.get(url).then(setWashTypes);
+    api.get(url).then(data => {
+      setWashTypes(data);
+      if (Array.isArray(data) && data.length > 0 && !washTypeId) {
+        setWashTypeId(String(data[0].id));
+      }
+    });
     api.get('/workshops').then(setWorkshops);
   }, [customerType, workshopId]);
 
+const REGEX_PLATE = /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$|^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$/;
+
   async function lookup() {
-    if (!regNumber.trim()) return;
+    const cleanReg = regNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!cleanReg) {
+      setError('Please enter a registration number');
+      return;
+    }
+    if (!REGEX_PLATE.test(cleanReg)) {
+      setError('Invalid Registration Number format (e.g. KL32L2011 or 22BH1234A)');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      const v = await api.get(`/vehicles/lookup/${regNumber.trim()}`);
+      const v = await api.get(`/vehicles/lookup/${cleanReg}`);
       setVehicle(v);
+      setRegNumber(cleanReg);
       if (v.phone) {
         setPhone(v.phone);
       } else {
         setPhone('');
+      }
+      if (v.customer_name) {
+        setCustomerName(v.customer_name);
+      } else {
+        setCustomerName('');
       }
     } catch (e) {
       setError(e.message);
@@ -46,15 +70,46 @@ export default function NewJobModal({ onClose, onCreated }) {
     }
   }
 
+  async function handleBeforePhotoUpload(e, slotIndex) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+      const res = await api.postForm('/jobs/upload-before-photo', formData);
+      if (res && res.url) {
+        setBeforePhotos(prev => {
+          const next = [...prev];
+          next[slotIndex] = res.url;
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error('Photo upload failed:', err);
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = '';
+    }
+  }
+
+  function removeBeforePhoto(slotIndex) {
+    setBeforePhotos(prev => {
+      const next = [...prev];
+      next.splice(slotIndex, 1);
+      return next;
+    });
+  }
+
   function updateVehicleField(field, value) {
     setVehicle({ ...vehicle, [field]: value });
   }
 
   async function saveVehicleCorrections() {
-    if (!vehicle) return;
+    if (!vehicle || !vehicle.id) return;
     await api.put(`/vehicles/${vehicle.id}`, {
       brand: vehicle.brand, model: vehicle.model, segment: vehicle.segment, color: vehicle.color
-    });
+    }).catch(err => console.error('Failed to save vehicle corrections:', err));
   }
 
   const isBike = vehicle?.segment === 'bike';
@@ -80,22 +135,28 @@ export default function NewJobModal({ onClose, onCreated }) {
     }
   }, [vehicle?.segment, workshops, workshopId, customerType, isCar, isBike, isScooter]);
 
+  const carWashTypes = washTypes.filter(wt => !wt.name.toLowerCase().includes('bike') && !wt.name.toLowerCase().includes('scooter') && !wt.name.toLowerCase().includes('chain'));
   const bikeWashType = washTypes.find(wt => wt.name.includes('Bike') || wt.name.includes('Scooter'));
   const chainLubeType = washTypes.find(wt => wt.name.includes('Chain'));
   const selectedWashId = (isBike || isScooter)
     ? (bikeWashType ? bikeWashType.id : (washTypes[0]?.id || 1))
-    : parseInt(washTypeId);
+    : (washTypeId ? parseInt(washTypeId) : (carWashTypes[0]?.id || washTypes[0]?.id || 1));
 
   const dynamicLubePrice = customerType === 'workshop'
     ? (chainLubeType?.workshop_pricing?.bike ?? chainLubeType?.pricing?.bike ?? 150)
     : (chainLubeType?.pricing?.bike ?? 150);
 
   async function createJob() {
-    if (!vehicle.reg_number) {
+    const cleanReg = (vehicle?.reg_number || regNumber).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!cleanReg) {
       setError('Registration number is required');
       return;
     }
-    if (isCar && !washTypeId) {
+    if (!REGEX_PLATE.test(cleanReg)) {
+      setError('Invalid Registration Number format (e.g. KL32L2011 or 22BH1234A)');
+      return;
+    }
+    if (isCar && !selectedWashId) {
       setError('Please select a wash package for the car');
       return;
     }
@@ -116,10 +177,12 @@ export default function NewJobModal({ onClose, onCreated }) {
         wash_type_id: selectedWashId,
         eta_minutes: 30,
         phone: phone || undefined,
+        customer_name: customerName || undefined,
+        before_photos: beforePhotos.filter(Boolean),
         has_chain_lube: isBike ? hasChainLube : false,
         chain_lube_price: dynamicLubePrice,
         customer_type: customerType,
-        workshop_id: customerType === 'workshop' ? workshopId : null,
+        workshop_id: (customerType === 'workshop' && workshopId) ? parseInt(workshopId) : null,
         payment_status: paymentStatus
       });
       onCreated();
@@ -204,7 +267,7 @@ export default function NewJobModal({ onClose, onCreated }) {
               autoComplete="off"
               autoCorrect="off"
               inputMode="text"
-              onChange={e => setRegNumber(e.target.value.toUpperCase())}
+              onChange={e => setRegNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
               onKeyDown={e => e.key === 'Enter' && lookup()}
               style={{ fontSize: 16 }}
             />
@@ -432,19 +495,77 @@ export default function NewJobModal({ onClose, onCreated }) {
               </div>
             </div>
 
-            {/* Customer Mobile Number */}
-            <div className="field mb-16">
-              <label style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block', color: 'var(--muted)' }}>
-                Customer Mobile Number <span style={{ fontWeight: 400, fontSize: 12 }}>(for WhatsApp Updates)</span>
-              </label>
-              <input
-                type="tel"
-                placeholder="10-digit mobile number (e.g. 9876543210)"
-                value={phone}
-                maxLength={10}
-                onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
-                style={{ fontSize: 15 }}
-              />
+            {/* Customer Name & Mobile Number */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }} className="mb-16">
+              <div>
+                <label style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block', color: 'var(--muted)' }}>
+                  Customer Name <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)' }}>(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Rahul Sharma"
+                  value={customerName}
+                  onChange={e => setCustomerName(e.target.value)}
+                  style={{ fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <label style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block', color: 'var(--muted)' }}>
+                  Customer Mobile <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)' }}>(WhatsApp)</span>
+                </label>
+                <input
+                  type="tel"
+                  placeholder="10-digit number"
+                  value={phone}
+                  maxLength={10}
+                  onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                  style={{ fontSize: 14 }}
+                />
+              </div>
+            </div>
+
+            {/* 4 Before-Wash Safety Inspection Photos */}
+            <div className="field mb-16" style={{ background: 'var(--surface-hover)', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <label style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  📷 Before-Wash Photos <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)' }}>(Optional - Max 4 for Safety)</span>
+                </label>
+                {uploadingPhoto && <span style={{ fontSize: 11, color: 'var(--primary)', fontWeight: 600 }}>Uploading...</span>}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                {[0, 1, 2, 3].map(slot => {
+                  const photoUrl = beforePhotos[slot];
+                  return (
+                    <div key={slot} style={{ position: 'relative', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', border: '1.5px dashed var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {photoUrl ? (
+                        <>
+                          <img src={photoUrl} alt={`Before ${slot + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <button
+                            type="button"
+                            onClick={() => removeBeforePhoto(slot)}
+                            style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: '50%', background: 'rgba(220, 38, 38, 0.85)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+                            title="Remove photo"
+                          >
+                            ✕
+                          </button>
+                        </>
+                      ) : (
+                        <label style={{ cursor: 'pointer', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, padding: 4 }}>
+                          <span style={{ fontSize: 18 }}>📸</span>
+                          <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Photo {slot + 1}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={e => handleBeforePhotoUpload(e, slot)}
+                            style={{ display: 'none' }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Wash Service Selection */}
@@ -459,15 +580,17 @@ export default function NewJobModal({ onClose, onCreated }) {
                   style={{ fontSize: 15, fontWeight: 500 }}
                 >
                   <option value="">-- Choose Wash Service --</option>
-                  {washTypes.map(wt => {
-                    const pMap = customerType === 'workshop' ? wt.workshop_pricing : wt.pricing;
-                    const pVal = pMap?.[vehicle.segment] || 0;
-                    return (
-                      <option key={wt.id} value={wt.id}>
-                        {wt.name} - ₹{pVal} {customerType === 'workshop' ? '(Garage Rate)' : ''}
-                      </option>
-                    );
-                  })}
+                  {washTypes
+                    .filter(wt => !wt.name.toLowerCase().includes('bike') && !wt.name.toLowerCase().includes('scooter') && !wt.name.toLowerCase().includes('chain'))
+                    .map(wt => {
+                      const pMap = customerType === 'workshop' ? wt.workshop_pricing : wt.pricing;
+                      const pVal = pMap?.[vehicle.segment] || 0;
+                      return (
+                        <option key={wt.id} value={wt.id}>
+                          {wt.name} - ₹{pVal} {customerType === 'workshop' ? '(Garage Rate)' : ''}
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
             )}

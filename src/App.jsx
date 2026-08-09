@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar.jsx';
 import Today from './pages/Today.jsx';
 import RunningJobs from './pages/RunningJobs.jsx';
@@ -13,8 +13,24 @@ import Expenses from './pages/Expenses.jsx';
 import Reports from './pages/Reports.jsx';
 import Workshops from './pages/Workshops.jsx';
 import SalaryAdvances from './pages/SalaryAdvances.jsx';
+import MobileScan from './pages/MobileScan.jsx';
+import MobileJobs from './pages/MobileJobs.jsx';
 
 export default function App() {
+  const location = useLocation();
+  const isMobileRoute = location.pathname.startsWith('/mobile');
+
+  if (isMobileRoute) {
+    return (
+      <div className="mobile-app-shell">
+        <Routes>
+          <Route path="/mobile" element={<MobileScan />} />
+          <Route path="/mobile/jobs" element={<MobileJobs />} />
+        </Routes>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <Sidebar />
@@ -33,6 +49,8 @@ export default function App() {
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/workshops" element={<Workshops />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/mobile" element={<MobileScan />} />
+          <Route path="/mobile/jobs" element={<MobileJobs />} />
         </Routes>
       </div>
     </div>

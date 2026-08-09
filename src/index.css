@@ -577,3 +577,548 @@ tbody tr:hover { background: #f8fafc; }
     font-size: 12px;
   }
 }
+
+/* ------------------------------------------------------------- */
+/* 📱 Standalone Mobile PWA Styles (/mobile & /mobile/jobs)       */
+/* ------------------------------------------------------------- */
+
+.mobile-app-shell {
+  min-height: 100vh;
+  width: 100%;
+  background: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #0f172a;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-container {
+  max-width: 540px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  box-shadow: 0 0 20px rgba(0,0,0,0.05);
+  position: relative;
+}
+
+.mobile-header {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #ffffff;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2);
+}
+
+.mobile-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.mobile-subtitle {
+  font-size: 12px;
+  opacity: 0.85;
+  display: block;
+  margin-top: 2px;
+}
+
+.mobile-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mobile-nav-btn {
+  background: rgba(255,255,255,0.2);
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255,255,255,0.3);
+  transition: all 0.2s ease;
+}
+
+.mobile-nav-btn:active {
+  background: rgba(255,255,255,0.4);
+}
+
+.mobile-back-btn {
+  background: rgba(255,255,255,0.2);
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.mobile-refresh-icon-btn {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-body {
+  padding: 16px 16px 120px 16px;
+  flex: 1;
+}
+
+.mobile-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.mobile-card-title {
+  margin: 0 0 14px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.mobile-btn {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+.mobile-btn-camera {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
+}
+
+.mobile-btn-camera:active {
+  transform: scale(0.98);
+}
+
+.mobile-btn-secondary {
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  width: auto;
+  padding: 12px 18px;
+}
+
+.mobile-btn-submit {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  font-size: 17px;
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+}
+
+.mobile-btn-submit:disabled {
+  background: #cbd5e1;
+  box-shadow: none;
+}
+
+.mobile-divider {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+  margin: 12px 0;
+  position: relative;
+}
+
+.mobile-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.mobile-input {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+}
+
+.mobile-input.reg-input {
+  font-family: monospace;
+  letter-spacing: 0.08em;
+  font-size: 18px;
+  text-transform: uppercase;
+  border-color: #0284c7;
+}
+
+.mobile-input-sm {
+  width: 100%;
+  padding: 10px;
+  font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+}
+
+.mobile-select {
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 10px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+}
+
+.mobile-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 6px;
+  letter-spacing: 0.04em;
+}
+
+.mobile-sublabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.mobile-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mobile-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.mobile-tab-btn {
+  padding: 12px 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.mobile-tab-btn.active.car {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+.mobile-tab-btn.active.bike {
+  background: #8b5cf6;
+  color: #ffffff;
+  border-color: #8b5cf6;
+}
+
+.mobile-tab-btn.active.scooter {
+  background: #d97706;
+  color: #ffffff;
+  border-color: #d97706;
+}
+
+.mobile-tab-btn.active.normal {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #0284c7;
+}
+
+.mobile-tab-btn.active.workshop {
+  background: #ccfbf1;
+  color: #0f766e;
+  border-color: #0d9488;
+}
+
+.mobile-tab-btn.active.pending {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #f59e0b;
+}
+
+.mobile-tab-btn.active.settled {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #10b981;
+}
+
+.mobile-lube-box {
+  background: #f3e8ff;
+  border: 1.5px solid #c084fc;
+  padding: 12px 16px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.mobile-total-box {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+}
+
+.mobile-total-price {
+  font-size: 22px;
+  color: #0284c7;
+}
+
+.mobile-hint-text {
+  font-size: 12px;
+  color: #d97706;
+  margin: 8px 0 0;
+  line-height: 1.4;
+}
+
+.mobile-alert {
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.mobile-alert.error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.mobile-alert.success {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+/* Mobile Active Jobs List */
+.mobile-jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mobile-job-card {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+
+.mobile-plate-badge {
+  background: #f8fafc;
+  border: 2px solid #0284c7;
+  border-radius: 10px;
+  padding: 8px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.plate-reg {
+  font-family: monospace;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #0f172a;
+}
+
+.mobile-job-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.job-vehicle-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.job-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #475569;
+}
+
+.job-lube-tag {
+  background: #f3e8ff;
+  color: #7e22ce;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.job-type-tag {
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.job-time-tag {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.job-phone {
+  font-size: 13px;
+  color: #0284c7;
+  font-weight: 600;
+}
+.job-phone a {
+  color: #0284c7;
+  text-decoration: none;
+}
+
+.mobile-job-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 12px;
+}
+
+.job-price-display {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0284c7;
+}
+
+.mobile-btn-complete {
+  flex: 1;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  border: none;
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
+}
+
+.mobile-btn-complete:active {
+  transform: scale(0.98);
+}
+
+.mobile-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 2px dashed #cbd5e1;
+}
+
+/* Floating Sticky Bottom Bar */
+.mobile-sticky-bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 540px;
+  background: #ffffff;
+  border-top: 1.5px solid #e2e8f0;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 999;
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.08);
+}
+
+.mobile-sticky-price {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-sticky-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.mobile-sticky-amount {
+  font-size: 22px;
+  font-weight: 900;
+  color: #0284c7;
+  line-height: 1.1;
+}
+
+.mobile-btn-submit-sticky {
+  flex: 1;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  border: none;
+  padding: 14px 18px;
+  border-radius: 12px;
+  font-size: 16.5px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+
+.mobile-btn-submit-sticky:disabled {
+  background: #cbd5e1;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.mobile-btn-submit-sticky:active:not(:disabled) {
+  transform: scale(0.98);
+}
+

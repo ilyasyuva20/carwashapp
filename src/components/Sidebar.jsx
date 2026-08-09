@@ -82,6 +82,10 @@ export default function Sidebar() {
 
         <NavLink to="/expenses" className={linkClass}>Expenses</NavLink>
         <NavLink to="/reports" className={linkClass}>Reports</NavLink>
+
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <NavLink to="/mobile" className={linkClass} target="_blank">📱 Open Mobile Scanner</NavLink>
+        </div>
       </div>
     </div>
   );

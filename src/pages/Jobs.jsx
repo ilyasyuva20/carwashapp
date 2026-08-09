@@ -338,6 +338,11 @@ export default function Jobs() {
                           </span>
                         )}
                       </div>
+                      {j.customer_name && (
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#0d9488', marginTop: 2 }}>
+                          👤 {j.customer_name}
+                        </div>
+                      )}
                       {j.customer_type === 'workshop' && (
                         <div>
                           <span className="workshop-badge">
@@ -348,6 +353,18 @@ export default function Jobs() {
                       <div className="muted" style={{ fontSize: 11.5, marginTop: 2, color: '#64748b' }}>
                         {j.vehicle.brand || 'Vehicle'} {j.vehicle.model || ''} {j.vehicle.color ? `· ${j.vehicle.color}` : ''}
                       </div>
+
+                      {/* Before Wash Photos Thumbnails */}
+                      {j.before_photos && Array.isArray(j.before_photos) && j.before_photos.length > 0 && (
+                        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>📷</span>
+                          {j.before_photos.map((pUrl, pIdx) => (
+                            <a key={pIdx} href={pUrl} target="_blank" rel="noreferrer" title="Click to view pre-wash photo">
+                              <img src={pUrl} alt="Before" style={{ width: 26, height: 26, borderRadius: 4, objectFit: 'cover', border: '1px solid #cbd5e1' }} />
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </td>
 
                     {/* 3. CONTACT NUMBER */}
@@ -359,21 +376,26 @@ export default function Jobs() {
                           : j.vehicle?.phone;
 
                         return contactNum ? (
-                          <a
-                            href={`tel:${contactNum}`}
-                            className="phone-link"
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: isWorkshop ? '#0d9488' : '#0284c7',
-                              textDecoration: 'none',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4
-                            }}
-                          >
-                            <span>📞</span> {contactNum}
-                          </a>
+                          <div>
+                            <a
+                              href={`tel:${contactNum}`}
+                              className="phone-link"
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: isWorkshop ? '#0d9488' : '#0284c7',
+                                textDecoration: 'none',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4
+                              }}
+                            >
+                              <span>📞</span> {contactNum}
+                            </a>
+                            {j.customer_name && (
+                              <div style={{ fontSize: 11.5, color: '#64748b' }}>{j.customer_name}</div>
+                            )}
+                          </div>
                         ) : (
                           <span style={{ fontSize: 12, color: '#94a3b8' }}>-</span>
                         );
