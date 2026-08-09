@@ -19,7 +19,10 @@ function repairPlateString(str) {
   if (!str) return '';
   const clean = str.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-  if (PLATE_REGEX_STRICT.test(clean)) return clean;
+  const stateCode = clean.slice(0, 2);
+  const isValidState = INDIAN_STATES.includes(stateCode) || stateCode === 'BH';
+
+  if (PLATE_REGEX_STRICT.test(clean) && isValidState) return clean;
 
   const letterToDigit = { 'O': '0', 'Q': '0', 'D': '0', 'I': '1', 'L': '1', 'Z': '2', 'E': '3', 'A': '4', 'S': '5', 'G': '6', 'T': '7', 'B': '8', 'N': '9' };
   const digitToLetter = { '0': 'O', '1': 'I', '2': 'Z', '3': 'E', '4': 'A', '5': 'S', '6': 'G', '7': 'T', '8': 'B', '9': 'N' };
@@ -27,9 +30,10 @@ function repairPlateString(str) {
   if (clean.length >= 8 && clean.length <= 11) {
     let state = clean.slice(0, 2);
     let stateFixed = state.split('').map(ch => digitToLetter[ch] || ch).join('');
-    if (stateFixed === 'KE' || stateFixed === 'KI' || stateFixed === 'K1') stateFixed = 'KL';
-    else if (!INDIAN_STATES.includes(stateFixed)) {
-      if (stateFixed.startsWith('K')) stateFixed = 'KL';
+    if (stateFixed === 'KE' || stateFixed === 'KI' || stateFixed === 'K1' || stateFixed === 'ZL' || stateFixed === '7L' || stateFixed === 'XL' || stateFixed === '2L' || stateFixed.endsWith('L')) {
+      stateFixed = 'KL';
+    } else if (!INDIAN_STATES.includes(stateFixed)) {
+      if (stateFixed.startsWith('K') || stateFixed.endsWith('L')) stateFixed = 'KL';
       else if (stateFixed.startsWith('M')) stateFixed = 'MH';
       else if (stateFixed.startsWith('D')) stateFixed = 'DL';
       else if (stateFixed.startsWith('T')) stateFixed = 'TN';
