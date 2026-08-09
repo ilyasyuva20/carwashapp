@@ -27,7 +27,7 @@ function repairPlateString(str) {
     let stateFixed = state.split('').map(ch => digitToLetter[ch] || ch).join('');
     if (stateFixed === 'KE' || stateFixed === 'KI' || stateFixed === 'K1') stateFixed = 'KL';
     else if (!INDIAN_STATES.includes(stateFixed)) {
-      if (stateFixed.startsWith('K')) stateFixed = 'KA'; // Common for KA self-drive
+      if (stateFixed.startsWith('K')) stateFixed = 'KA'; // Common for KA self-drive / KL plates
       else if (stateFixed.startsWith('M')) stateFixed = 'MH';
       else if (stateFixed.startsWith('D')) stateFixed = 'DL';
       else if (stateFixed.startsWith('T')) stateFixed = 'TN';
@@ -64,20 +64,13 @@ function repairPlateString(str) {
 }
 
 /**
- * Creates candidate image passes optimized for all Indian license plate formats:
- * Pass 1: Self-Drive Rental Plate (Black Background, Yellow Text)
- * Pass 2: Weathered / Sticker Plate Filter (removes rust, screws, bullet dots & underlines)
- * Pass 3: Commercial Taxi (Yellow Background, Black Text)
- * Pass 4: Electric Vehicle (Green Background, White Embossed Text)
- * Pass 5: Standard Private Vehicle Bumper Pass (White Background, Black Text)
- * Pass 6: Middle Region Pass
- * Pass 7: Full Photo Pass
+ * Generates image canvas passes optimized for EV green plates, Self-drive black plates, Yellow taxis, and Sticker plates.
  */
 function createOcrCandidates(img) {
   const candidates = [];
 
-  // Pass 1: Self-Drive Commercial Rental Extractor (Black Background, Yellow Text)
-  const createSelfDriveRentalCandidate = (cropX, cropY, cropW, cropH) => {
+  // Helper to draw crop & process pixels
+  const processCrop = (cropX, cropY, cropW, cropH, pixelFilter) => {
     try {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -87,7 +80,7 @@ function createOcrCandidates(img) {
       const srcW = Math.round(img.width * cropW);
       const srcH = Math.round(img.height * cropH);
 
-      const targetW = Math.min(1000, srcW);
+      const targetW = Math.min(1200, srcW);
       const targetH = Math.round((srcH * targetW) / srcW);
 
       canvas.width = targetW;
@@ -99,15 +92,7 @@ function createOcrCandidates(img) {
       const d = imgData.data;
 
       for (let i = 0; i < d.length; i += 4) {
-        const r = d[i];
-        const g = d[i + 1];
-        const b = d[i + 2];
-
-        // Self-drive rental plates have Yellow text (high R & G, low B) on Black background
-        const isYellowText = r > 125 && g > 105 && (r - b > 30) && (g - b > 20);
-
-        let pixelVal = isYellowText ? 0 : 255; // Yellow text -> Black text (0), Black plate -> White canvas (255)
-
+        const pixelVal = pixelFilter(d[i], d[i + 1], d[i + 2]);
         d[i] = pixelVal;
         d[i + 1] = pixelVal;
         d[i + 2] = pixelVal;
@@ -120,219 +105,68 @@ function createOcrCandidates(img) {
     }
   };
 
-  // Pass 2: Weathered & Sticker Font Adaptive Binarization (Removes rust, screws, green bullet dots, underlines)
-  const createStickerPlateCandidate = (cropX, cropY, cropW, cropH) => {
-    try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      const srcX = Math.round(img.width * cropX);
-      const srcY = Math.round(img.height * cropY);
-      const srcW = Math.round(img.width * cropW);
-      const srcH = Math.round(img.height * cropH);
-
-      const targetW = Math.min(1000, srcW);
-      const targetH = Math.round((srcH * targetW) / srcW);
-
-      canvas.width = targetW;
-      canvas.height = targetH;
-
-      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetW, targetH);
-
-      const imgData = ctx.getImageData(0, 0, targetW, targetH);
-      const d = imgData.data;
-
-      // Dark bold sticker letters have luminance < 75; rust/dust/screws/plate background have luminance >= 75
-      for (let i = 0; i < d.length; i += 4) {
-        const r = d[i];
-        const g = d[i + 1];
-        const b = d[i + 2];
-        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-
-        const pixelVal = luminance < 75 ? 0 : 255; // Solid black text, pure white canvas
-
-        d[i] = pixelVal;
-        d[i + 1] = pixelVal;
-        d[i + 2] = pixelVal;
-      }
-
-      ctx.putImageData(imgData, 0, 0);
-      return canvas.toDataURL('image/jpeg', 0.95);
-    } catch (e) {
-      return null;
-    }
+  // 1. Filter: EV Green Plate (Green bg -> White canvas, Embossed characters + INDIA watermark -> Solid Black characters)
+  const evFilter = (r, g, b) => {
+    const isGreenBg = (g > 65) && (g - r > 18) && (g - b > 12);
+    return isGreenBg ? 255 : 0;
   };
 
-  // Pass 3: Commercial Taxi Yellow Plate Channel Extractor
-  const createYellowTaxiCandidate = (cropX, cropY, cropW, cropH) => {
-    try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      const srcX = Math.round(img.width * cropX);
-      const srcY = Math.round(img.height * cropY);
-      const srcW = Math.round(img.width * cropW);
-      const srcH = Math.round(img.height * cropH);
-
-      const targetW = Math.min(1000, srcW);
-      const targetH = Math.round((srcH * targetW) / srcW);
-
-      canvas.width = targetW;
-      canvas.height = targetH;
-
-      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetW, targetH);
-
-      const imgData = ctx.getImageData(0, 0, targetW, targetH);
-      const d = imgData.data;
-
-      for (let i = 0; i < d.length; i += 4) {
-        const r = d[i];
-        const g = d[i + 1];
-        const b = d[i + 2];
-
-        const isYellowBg = r > 130 && g > 110 && (r - b > 35) && (g - b > 25);
-        const isDarkText = r < 100 && g < 100 && b < 100;
-
-        let pixelVal = 255;
-        if (isDarkText) {
-          pixelVal = 0;
-        } else if (isYellowBg) {
-          pixelVal = 255;
-        }
-
-        d[i] = pixelVal;
-        d[i + 1] = pixelVal;
-        d[i + 2] = pixelVal;
-      }
-
-      ctx.putImageData(imgData, 0, 0);
-      return canvas.toDataURL('image/jpeg', 0.95);
-    } catch (e) {
-      return null;
-    }
+  // 2. Filter: Self-Drive Commercial Rental (Yellow text on Black plate background)
+  const selfDriveFilter = (r, g, b) => {
+    const isYellowText = (r > 120) && (g > 100) && (r - b > 30) && (g - b > 20);
+    return isYellowText ? 0 : 255;
   };
 
-  // Pass 4: EV Green Plate Channel Extractor
-  const createEvCandidate = (cropX, cropY, cropW, cropH) => {
-    try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      const srcX = Math.round(img.width * cropX);
-      const srcY = Math.round(img.height * cropY);
-      const srcW = Math.round(img.width * cropW);
-      const srcH = Math.round(img.height * cropH);
-
-      const targetW = Math.min(1000, srcW);
-      const targetH = Math.round((srcH * targetW) / srcW);
-
-      canvas.width = targetW;
-      canvas.height = targetH;
-
-      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetW, targetH);
-
-      const imgData = ctx.getImageData(0, 0, targetW, targetH);
-      const d = imgData.data;
-
-      for (let i = 0; i < d.length; i += 4) {
-        const r = d[i];
-        const g = d[i + 1];
-        const b = d[i + 2];
-
-        const isGreen = g > (r + 20) && g > 85;
-        let pixelVal;
-
-        if (isGreen) {
-          pixelVal = 255;
-        } else {
-          const avg = (r + g + b) / 3;
-          pixelVal = avg > 120 ? 0 : 255;
-        }
-
-        d[i] = pixelVal;
-        d[i + 1] = pixelVal;
-        d[i + 2] = pixelVal;
-      }
-
-      ctx.putImageData(imgData, 0, 0);
-      return canvas.toDataURL('image/jpeg', 0.95);
-    } catch (e) {
-      return null;
-    }
+  // 3. Filter: Commercial Taxi (Yellow background, Black text)
+  const taxiFilter = (r, g, b) => {
+    const isYellowBg = (r > 130) && (g > 110) && (r - b > 30) && (g - b > 20);
+    const isDarkText = (r < 100) && (g < 100) && (b < 100);
+    if (isDarkText) return 0;
+    if (isYellowBg) return 255;
+    return 255;
   };
 
-  // Pass 5: Standard Contrast Pass
-  const createStandardCandidate = (cropX, cropY, cropW, cropH, contrastBoost = 1.5) => {
-    try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      const srcX = Math.round(img.width * cropX);
-      const srcY = Math.round(img.height * cropY);
-      const srcW = Math.round(img.width * cropW);
-      const srcH = Math.round(img.height * cropH);
-
-      const targetW = Math.min(1000, srcW);
-      const targetH = Math.round((srcH * targetW) / srcW);
-
-      canvas.width = targetW;
-      canvas.height = targetH;
-
-      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetW, targetH);
-
-      const imgData = ctx.getImageData(0, 0, targetW, targetH);
-      const d = imgData.data;
-
-      for (let i = 0; i < d.length; i += 4) {
-        const r = d[i];
-        const g = d[i + 1];
-        const b = d[i + 2];
-        let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-
-        gray = (gray - 128) * contrastBoost + 128;
-        gray = Math.max(0, Math.min(255, gray));
-
-        d[i] = gray;
-        d[i + 1] = gray;
-        d[i + 2] = gray;
-      }
-
-      ctx.putImageData(imgData, 0, 0);
-      return canvas.toDataURL('image/jpeg', 0.95);
-    } catch (e) {
-      return null;
-    }
+  // 4. Filter: Weathered / Custom Sticker Plate (Adaptive Luminance)
+  const stickerFilter = (r, g, b) => {
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    return lum < 80 ? 0 : 255;
   };
 
-  // 1. Self-Drive Rental Black Plate Pass (Yellow Text on Black Background)
-  const selfDriveCand = createSelfDriveRentalCandidate(0.02, 0.25, 0.96, 0.70);
-  if (selfDriveCand) candidates.push(selfDriveCand);
+  // 5. Filter: Standard Contrast Boost
+  const contrastFilter = (r, g, b) => {
+    let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+    gray = (gray - 128) * 1.6 + 128;
+    return Math.max(0, Math.min(255, gray));
+  };
 
-  // 2. Weathered & Sticker Plate Pass
-  const stickerCand = createStickerPlateCandidate(0.02, 0.20, 0.96, 0.75);
-  if (stickerCand) candidates.push(stickerCand);
+  // Spatial Crops:
+  // Tight/Mid Crop (Good for Ather EV plates & close-ups): x:0.02, y:0.10, w:0.96, h:0.85
+  // Bumper Center Crop (Good for Mercedes full car photo): x:0.15, y:0.45, w:0.70, h:0.50
 
-  // 3. Commercial Taxi Yellow Pass
-  const yellowCand = createYellowTaxiCandidate(0.02, 0.25, 0.96, 0.70);
-  if (yellowCand) candidates.push(yellowCand);
+  // Pass 1: EV Green Plate (Tight Crop)
+  candidates.push({ name: 'EV-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, evFilter) });
+  // Pass 2: EV Green Plate (Bumper Center Crop)
+  candidates.push({ name: 'EV-Bumper', data: processCrop(0.15, 0.40, 0.70, 0.55, evFilter) });
 
-  // 4. EV Green Plate Pass
-  const evCand = createEvCandidate(0.02, 0.20, 0.96, 0.75);
-  if (evCand) candidates.push(evCand);
+  // Pass 3: Self-Drive Rental (Bumper Center Crop)
+  candidates.push({ name: 'SelfDrive-Bumper', data: processCrop(0.15, 0.45, 0.70, 0.50, selfDriveFilter) });
+  // Pass 4: Self-Drive Rental (Tight Crop)
+  candidates.push({ name: 'SelfDrive-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, selfDriveFilter) });
 
-  // 5. Lower Bumper Standard Pass (30% to 100% height)
-  const cand1 = createStandardCandidate(0.02, 0.30, 0.96, 0.68, 1.8);
-  if (cand1) candidates.push(cand1);
+  // Pass 5: Commercial Taxi (Bumper Center Crop)
+  candidates.push({ name: 'Taxi-Bumper', data: processCrop(0.15, 0.40, 0.70, 0.55, taxiFilter) });
+  // Pass 6: Commercial Taxi (Tight Crop)
+  candidates.push({ name: 'Taxi-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, taxiFilter) });
 
-  // 6. Middle Region Pass (20% to 80% height)
-  const cand2 = createStandardCandidate(0.05, 0.20, 0.90, 0.60, 1.5);
-  if (cand2) candidates.push(cand2);
+  // Pass 7: Weathered Sticker Plate (Tight Crop)
+  candidates.push({ name: 'Sticker-Tight', data: processCrop(0.02, 0.05, 0.96, 0.90, stickerFilter) });
 
-  // 7. Full Photo Pass
-  const cand3 = createStandardCandidate(0, 0, 1.0, 1.0, 1.2);
-  if (cand3) candidates.push(cand3);
+  // Pass 8: Standard Contrast (Bumper Center Crop)
+  candidates.push({ name: 'Standard-Bumper', data: processCrop(0.15, 0.35, 0.70, 0.60, contrastFilter) });
+  // Pass 9: Standard Contrast (Full Photo)
+  candidates.push({ name: 'Standard-Full', data: processCrop(0, 0, 1.0, 1.0, contrastFilter) });
 
-  return candidates;
+  return candidates.filter(c => c.data !== null);
 }
 
 function parsePlateFromTesseractData(data) {
@@ -342,7 +176,7 @@ function parsePlateFromTesseractData(data) {
 
   const fullClean = (data?.text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-  // 1. Direct Regex Match on full clean
+  // 1. Direct Regex Match on full clean text
   let m = fullClean.match(PLATE_REGEX_SEARCH);
   if (m) return m[0];
 
@@ -352,7 +186,7 @@ function parsePlateFromTesseractData(data) {
     if (lm) return lm[0];
   }
 
-  // 3. Consecutive Line Combination (Two-line scooter/bike plates like KL 32 \n H 2920)
+  // 3. Consecutive Line Combination (Two-line scooter plates like Ather Rear KL43 \n S9064)
   for (let i = 0; i < lines.length - 1; i++) {
     const combined = lines[i] + lines[i + 1];
     let cm = combined.match(PLATE_REGEX_SEARCH);
@@ -401,10 +235,11 @@ export async function recognizePlateNumber(imageSource) {
       tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -',
     });
 
-    for (const candUrl of candidates) {
-      const result = await worker.recognize(candUrl);
+    for (const candidate of candidates) {
+      const result = await worker.recognize(candidate.data);
       const plate = parsePlateFromTesseractData(result.data);
       if (plate) {
+        console.log(`[OCR SUCCESS] Matched plate '${plate}' on pass: ${candidate.name}`);
         await worker.terminate();
         return plate;
       }
