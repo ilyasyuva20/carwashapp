@@ -255,7 +255,7 @@ export default function MobileScan() {
         <div className="mobile-card mb-16">
           <h3 className="mobile-card-title">📷 1. Scan or Enter Vehicle</h3>
 
-          {/* Native Camera Trigger Input */}
+          {/* Native Camera & Gallery Trigger Inputs */}
           <input
             type="file"
             accept="image/*"
@@ -264,19 +264,35 @@ export default function MobileScan() {
             style={{ display: 'none' }}
             onChange={handlePlateOcr}
           />
+          <input
+            type="file"
+            accept="image/*"
+            id="mobile-ocr-gallery"
+            style={{ display: 'none' }}
+            onChange={handlePlateOcr}
+          />
 
-          <button
-            type="button"
-            className="mobile-btn mobile-btn-camera mb-12"
-            onClick={() => document.getElementById('mobile-ocr-camera')?.click()}
-            disabled={ocrScanning || loading}
-          >
-            {ocrScanning ? (
-              <>🔄 Reading Plate Photo...</>
-            ) : (
-              <>📸 Scan Number Plate</>
-            )}
-          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <button
+              type="button"
+              className="mobile-btn mobile-btn-camera"
+              onClick={() => document.getElementById('mobile-ocr-camera')?.click()}
+              disabled={ocrScanning || loading}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '12px 8px', fontSize: 13 }}
+            >
+              {ocrScanning ? '🔄 Scanning...' : '📸 Take Photo'}
+            </button>
+
+            <button
+              type="button"
+              className="mobile-btn mobile-btn-secondary"
+              onClick={() => document.getElementById('mobile-ocr-gallery')?.click()}
+              disabled={ocrScanning || loading}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '12px 8px', fontSize: 13, background: '#f8fafc', color: '#0f172a', border: '1.5px solid #cbd5e1' }}
+            >
+              🖼️ From Gallery
+            </button>
+          </div>
 
           <div className="mobile-divider">OR TYPE MANUAL REGISTRATION</div>
 
@@ -450,7 +466,6 @@ export default function MobileScan() {
                           <input
                             type="file"
                             accept="image/*"
-                            capture="environment"
                             onChange={e => handleBeforePhotoUpload(e, slot)}
                             style={{ display: 'none' }}
                           />
