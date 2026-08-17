@@ -151,8 +151,9 @@ function createOcrCandidates(img) {
       } else if (filterType === 'ev') {
         for (let i = 0; i < d.length; i += 4) {
           const r = d[i], g = d[i + 1], b = d[i + 2];
-          const isGreen = (g > 60) && (g - r > 15) && (g - b > 10);
-          const val = isGreen ? 255 : 0;
+          const isWhiteText = (r > 120 && g > 120 && b > 120) && Math.abs(r - g) < 45 && Math.abs(g - b) < 45;
+          const isGreenBg = (g > 60) && (g - r > 12) && (g - b > 10);
+          const val = isWhiteText ? 0 : (isGreenBg ? 255 : 255);
           d[i] = val; d[i + 1] = val; d[i + 2] = val;
         }
       } else if (filterType === 'selfdrive') {
@@ -202,46 +203,94 @@ function createOcrCandidates(img) {
   return candidates.filter(c => c.data !== null);
 }
 
+const NOISE_WORDS = [
+  'IND', 'INDIA', 'HERO', 'HONDA', 'ATHER', 'PALAL', 'MOBILITY', 'DEALER',
+  'MOTORS', 'SUZUKI', 'MARUTI', 'HYUNDAI', 'TATA', 'YAMAHA', 'ENFIELD', 'KTM',
+  'BAJAJ', 'VESPA', 'TVS', 'CHEVROLET', 'FORD', 'TOYOTA', 'VOLKSWAGEN', 'BMW',
+  'BENZ', 'AUDI', 'NISSAN', 'MG', 'KIA', 'JEEP', 'RENAULT', 'MAHINDRA', 'SKODA',
+  'NEXA', 'CAR', 'BIKE', 'EV', 'AUTO', 'GARAGE', 'WORKSHOP', 'SERVICE'
+];
+
+function cleanNoiseFromText(rawText) {
+  let cleaned = (rawText || '').toUpperCase();
+  for (const word of NOISE_WORDS) {
+    const regex = new RegExp('\\b' + word + '\\b', 'g');
+    cleaned = cleaned.replace(regex, '');
+  }
+  return cleaned;
+}
+
 function parsePlateFromTesseractData(data) {
-  const lines = (data?.lines || [])
-    .map(l => (l.text || '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
+  const rawFullText = (data?.text || (data?.lines || []).map(l => l.text).join('\n')) || '';
+  const cleanedFullText = cleanNoiseFromText(rawFullText);
+
+  // 1. Direct regex on joined text
+  const cleanUnprocessed = cleanedFullText.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  let directMatch = cleanUnprocessed.match(PLATE_REGEX_SEARCH);
+  if (directMatch) {
+    let rep = repairPlateString(directMatch[0]);
+    if (PLATE_REGEX_STRICT.test(rep)) return { plate: rep, isFullMatch: true };
+  }
+
+  const lines = cleanedFullText
+    .split(/[\r\n]+/)
+    .map(l => l.toUpperCase().replace(/[^A-Z0-9]/g, ''))
     .filter(Boolean);
 
-  const plateLinesOnly = lines.filter(l => l !== 'IND' && l !== 'INDIA' && l !== 'HERO' && l !== 'HONDA' && l !== 'ATHER' && l !== 'PALAL' && l !== 'MOBILITY');
-
-  for (const line of plateLinesOnly) {
+  // 2. Direct line match or repaired line match
+  for (const line of lines) {
     let lm = line.match(PLATE_REGEX_SEARCH);
-    if (lm) return { plate: lm[0], isFullMatch: true };
+    if (lm) {
+      const repLm = repairPlateString(lm[0]);
+      if (PLATE_REGEX_STRICT.test(repLm)) return { plate: repLm, isFullMatch: true };
+    }
 
     let rep = repairPlateString(line);
     if (PLATE_REGEX_STRICT.test(rep)) return { plate: rep, isFullMatch: true };
   }
 
-  for (let i = 0; i < plateLinesOnly.length - 1; i++) {
-    const combined = plateLinesOnly[i] + plateLinesOnly[i + 1];
-    let cm = combined.match(PLATE_REGEX_SEARCH);
-    if (cm) return { plate: cm[0], isFullMatch: true };
+  // 3. Try pairs of lines (including non-adjacent and reversed for 2-line motorcycle/scooter plates)
+  for (let i = 0; i < lines.length; i++) {
+    for (let j = 0; j < lines.length; j++) {
+      if (i === j) continue;
+      const combined = lines[i] + lines[j];
+      let rep = repairPlateString(combined);
+      if (PLATE_REGEX_STRICT.test(rep)) return { plate: rep, isFullMatch: true };
 
-    let rep = repairPlateString(combined);
-    if (PLATE_REGEX_STRICT.test(rep)) return { plate: rep, isFullMatch: true };
-
-    if (i < plateLinesOnly.length - 2) {
-      const combined3 = plateLinesOnly[i] + plateLinesOnly[i + 1] + plateLinesOnly[i + 2];
-      let cm3 = combined3.match(PLATE_REGEX_SEARCH);
-      if (cm3) return { plate: cm3[0], isFullMatch: true };
-
-      let rep3 = repairPlateString(combined3);
-      if (PLATE_REGEX_STRICT.test(rep3)) return { plate: rep3, isFullMatch: true };
+      let cm = combined.match(PLATE_REGEX_SEARCH);
+      if (cm) {
+        const repCm = repairPlateString(cm[0]);
+        if (PLATE_REGEX_STRICT.test(repCm)) return { plate: repCm, isFullMatch: true };
+      }
     }
   }
 
-  const combinedPlateText = plateLinesOnly.join('');
-  const digit4Match = combinedPlateText.match(PARTIAL_FOUR_DIGIT_REGEX);
-  if (digit4Match) {
-    const partialWithState = combinedPlateText.match(/[A-Z]{2}[0-9]{0,4}[0-9]{4}/);
-    if (partialWithState) {
-      return { plate: partialWithState[0], isFullMatch: false };
+  // 4. Try 3-line combinations
+  for (let i = 0; i < lines.length; i++) {
+    for (let j = 0; j < lines.length; j++) {
+      if (i === j) continue;
+      for (let k = 0; k < lines.length; k++) {
+        if (k === i || k === j) continue;
+        const combined3 = lines[i] + lines[j] + lines[k];
+        let rep3 = repairPlateString(combined3);
+        if (PLATE_REGEX_STRICT.test(rep3)) return { plate: rep3, isFullMatch: true };
+      }
     }
+  }
+
+  // 5. Join ALL lines
+  const allJoined = lines.join('');
+  let repAll = repairPlateString(allJoined);
+  if (PLATE_REGEX_STRICT.test(repAll)) return { plate: repAll, isFullMatch: true };
+
+  // 6. Partial 4-digit fallback
+  const partialWithState = allJoined.match(/[A-Z]{2}[0-9]{0,4}[0-9]{4}/);
+  if (partialWithState) {
+    return { plate: partialWithState[0], isFullMatch: false };
+  }
+
+  const digit4Match = allJoined.match(PARTIAL_FOUR_DIGIT_REGEX);
+  if (digit4Match) {
     return { plate: digit4Match[0], isFullMatch: false };
   }
 

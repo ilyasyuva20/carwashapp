@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { getBrandsForSegment, getModelsForBrand, COMMON_VEHICLE_COLORS } from '../utils/vehicleOptions';
 
 export default function NewJobModal({ onClose, onCreated }) {
   const [washTypes, setWashTypes] = useState([]);
@@ -170,13 +171,16 @@ function getImageUrl(url) {
   });
 
   useEffect(() => {
-    if (workshopId && customerType === 'workshop') {
+    if (customerType === 'workshop' && workshopId) {
       const currentW = workshops.find(w => String(w.id) === String(workshopId));
       if (currentW) {
         if (isCar && currentW.type !== 'Car Workshop') {
           setWorkshopId('');
         } else if ((isBike || isScooter) && currentW.type !== 'Bike Workshop') {
           setWorkshopId('');
+        } else {
+          if (currentW.name) setCustomerName(currentW.name);
+          if (currentW.phone) setPhone(currentW.phone.replace(/\D/g, ''));
         }
       }
     }
@@ -203,16 +207,33 @@ function getImageUrl(url) {
       setError('Invalid Registration Number format (e.g. KL32L2011 or 22BH1234A)');
       return;
     }
-    if (isCar && !selectedWashId) {
-      setError('Please select a wash package for the car');
+    if (!vehicle?.brand || !vehicle.brand.trim()) {
+      setError('Vehicle Brand is required (e.g. Honda, Maruti, TVS)');
+      return;
+    }
+    if (!vehicle?.model || !vehicle.model.trim()) {
+      setError('Vehicle Model is required (e.g. Activa, Swift, Jupiter)');
+      return;
+    }
+    if (!vehicle?.color || !vehicle.color.trim()) {
+      setError('Vehicle Color is required (e.g. White, Red, Blue)');
       return;
     }
     if (customerType === 'workshop' && !workshopId) {
       setError('Please select a workshop for workshop customer vehicles');
       return;
     }
-    if (phone && phone.length !== 10) {
-      setError('Mobile number must be exactly 10 digits');
+    if (!customerName || !customerName.trim()) {
+      setError(customerType === 'workshop' ? 'Workshop Partner Name is required' : 'Customer Name is required');
+      return;
+    }
+    const cleanPhone = (phone || '').replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      setError('Mobile phone number is required and must be exactly 10 digits');
+      return;
+    }
+    if (isCar && !selectedWashId) {
+      setError('Please select a wash package for the car');
       return;
     }
     setLoading(true);
@@ -223,8 +244,8 @@ function getImageUrl(url) {
         reg_number: vehicle.reg_number,
         wash_type_id: selectedWashId,
         eta_minutes: 30,
-        phone: phone || undefined,
-        customer_name: customerName || undefined,
+        phone: cleanPhone,
+        customer_name: customerName.trim(),
         before_photos: beforePhotos.filter(Boolean),
         has_chain_lube: isBike ? hasChainLube : false,
         chain_lube_price: dynamicLubePrice,
@@ -257,13 +278,13 @@ function getImageUrl(url) {
 
   const totalPrice = baseWashPrice !== null ? (baseWashPrice + (isBike && hasChainLube ? dynamicLubePrice : 0)) : null;
 
-  return (
+return (
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.45)',
-        backdropFilter: 'blur(3px)',
+        background: 'rgba(15, 23, 42, 0.65)',
+        backdropFilter: 'blur(8px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -272,6 +293,36 @@ function getImageUrl(url) {
       }}
       onClick={onClose}
     >
+      {/* 🌀 Full Page Blur Backdrop Overlay Loader */}
+      {(ocrScanning || uploadingPhoto || loading) && (
+        <div className="fullpage-loader-backdrop">
+          <div className="loader-card">
+            <div className="spinner-outer-ring">
+              <span className="spinner-center-icon">
+                {ocrScanning ? '🔍' : uploadingPhoto ? '📸' : '🚀'}
+              </span>
+            </div>
+            <h4 className="loader-title">
+              {ocrScanning
+                ? 'Scanning License Plate...'
+                : uploadingPhoto
+                ? 'Uploading Vehicle Photo...'
+                : 'Processing Details...'}
+            </h4>
+            <p className="loader-subtitle">
+              {ocrScanning
+                ? 'AI Vision is reading the registration plate from image'
+                : uploadingPhoto
+                ? 'Compressing & saving inspection photo securely'
+                : 'Connecting to VAHAN database & initializing job'}
+            </p>
+            <div className="loader-progress-bar">
+              <div className="loader-progress-fill" />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
         className="card"
         style={{
@@ -500,43 +551,74 @@ function getImageUrl(url) {
               )}
             </div>
 
-            {/* 3-Column Grid for Editable Vehicle Attributes */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
+            {/* 4-Column Grid for Editable Vehicle Attributes */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1fr', gap: 8, marginBottom: 16 }}>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
-                  Brand
+                  Brand <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
                   type="text"
+                  list="modal-brand-list"
                   value={vehicle.brand || ''}
                   onChange={e => updateVehicleField('brand', e.target.value)}
                   placeholder="e.g. Honda"
                   style={{ fontSize: 13, padding: '8px 10px' }}
                 />
+                <datalist id="modal-brand-list">
+                  {getBrandsForSegment(vehicle.segment).map(b => (
+                    <option key={b} value={b} />
+                  ))}
+                </datalist>
               </div>
 
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
-                  Model
+                  Model <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
                   type="text"
+                  list="modal-model-list"
                   value={vehicle.model || ''}
                   onChange={e => updateVehicleField('model', e.target.value)}
                   placeholder="e.g. City / Activa"
                   style={{ fontSize: 13, padding: '8px 10px' }}
                 />
+                <datalist id="modal-model-list">
+                  {getModelsForBrand(vehicle.brand).map(m => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
               </div>
 
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
-                  Color
+                  Color <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
                   type="text"
+                  list="modal-color-list"
                   value={vehicle.color || ''}
                   onChange={e => updateVehicleField('color', e.target.value)}
-                  placeholder="e.g. Red"
+                  placeholder="e.g. Cherry Red"
+                  style={{ fontSize: 13, padding: '8px 10px' }}
+                />
+                <datalist id="modal-color-list">
+                  {COMMON_VEHICLE_COLORS.map(c => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
+                  Year
+                </label>
+                <input
+                  type="text"
+                  value={vehicle.year || ''}
+                  onChange={e => updateVehicleField('year', e.target.value)}
+                  placeholder="2021"
                   style={{ fontSize: 13, padding: '8px 10px' }}
                 />
               </div>
@@ -546,7 +628,7 @@ function getImageUrl(url) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }} className="mb-16">
               <div>
                 <label style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block', color: 'var(--muted)' }}>
-                  Customer Name <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)' }}>(Optional)</span>
+                  {customerType === 'workshop' ? 'Workshop Name' : 'Customer Name'} <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
                   type="text"
@@ -558,7 +640,7 @@ function getImageUrl(url) {
               </div>
               <div>
                 <label style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block', color: 'var(--muted)' }}>
-                  Customer Mobile <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)' }}>(WhatsApp)</span>
+                  Mobile Phone <span style={{ color: '#ef4444' }}>* (10 digits)</span>
                 </label>
                 <input
                   type="tel"

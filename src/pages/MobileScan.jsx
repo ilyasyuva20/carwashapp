@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { recognizePlateNumber } from '../ocr';
+import { getBrandsForSegment, getModelsForBrand, COMMON_VEHICLE_COLORS } from '../utils/vehicleOptions';
 
 function compressImage(file, maxWidth = 1000, maxHeight = 1000, quality = 0.75) {
   return new Promise((resolve) => {
@@ -199,6 +200,22 @@ export default function MobileScan() {
     return true;
   });
 
+  useEffect(() => {
+    if (customerType === 'workshop' && workshopId) {
+      const currentW = workshops.find(w => String(w.id) === String(workshopId));
+      if (currentW) {
+        if (isCar && currentW.type !== 'Car Workshop') {
+          setWorkshopId('');
+        } else if ((isBike || isScooter) && currentW.type !== 'Bike Workshop') {
+          setWorkshopId('');
+        } else {
+          if (currentW.name) setCustomerName(currentW.name);
+          if (currentW.phone) setPhone(currentW.phone.replace(/\D/g, ''));
+        }
+      }
+    }
+  }, [vehicle?.segment, workshops, workshopId, customerType, isCar, isBike, isScooter]);
+
   const carWashTypes = washTypes.filter(wt => !wt.name.toLowerCase().includes('bike') && !wt.name.toLowerCase().includes('scooter') && !wt.name.toLowerCase().includes('chain'));
   const bikeWashType = washTypes.find(wt => wt.name.includes('Bike') || wt.name.includes('Scooter'));
   const chainLubeType = washTypes.find(wt => wt.name.includes('Chain'));
@@ -237,16 +254,33 @@ export default function MobileScan() {
       setError('Invalid Registration Number format (e.g. KL32L2011 or 22BH1234A)');
       return;
     }
-    if (isCar && !selectedWashId) {
-      setError('Please select a wash package for the car');
+    if (!vehicle?.brand || !vehicle.brand.trim()) {
+      setError('Vehicle Brand is required (e.g. Honda, Maruti, TVS)');
+      return;
+    }
+    if (!vehicle?.model || !vehicle.model.trim()) {
+      setError('Vehicle Model is required (e.g. Activa, Swift, Jupiter)');
+      return;
+    }
+    if (!vehicle?.color || !vehicle.color.trim()) {
+      setError('Vehicle Color is required (e.g. White, Red, Blue)');
       return;
     }
     if (customerType === 'workshop' && !workshopId) {
       setError('Please select a workshop for workshop customer vehicles');
       return;
     }
-    if (phone && phone.length !== 10) {
-      setError('Mobile number must be exactly 10 digits');
+    if (!customerName || !customerName.trim()) {
+      setError(customerType === 'workshop' ? 'Workshop Partner Name is required' : 'Customer Name is required');
+      return;
+    }
+    const cleanPhone = (phone || '').replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      setError('Mobile phone number is required and must be exactly 10 digits');
+      return;
+    }
+    if (isCar && !selectedWashId) {
+      setError('Please select a wash package for the car');
       return;
     }
 
@@ -258,8 +292,8 @@ export default function MobileScan() {
         reg_number: vehicle.reg_number,
         wash_type_id: selectedWashId,
         eta_minutes: 30,
-        phone: phone || undefined,
-        customer_name: customerName || undefined,
+        phone: cleanPhone,
+        customer_name: customerName.trim(),
         before_photos: beforePhotos.filter(Boolean),
         has_chain_lube: isBike ? hasChainLube : false,
         chain_lube_price: dynamicLubePrice,
@@ -282,6 +316,36 @@ export default function MobileScan() {
 
   return (
     <div className="mobile-container">
+      {/* 🌀 Full Page Blur Backdrop Overlay Loader */}
+      {(ocrScanning || uploadingPhoto || loading) && (
+        <div className="fullpage-loader-backdrop">
+          <div className="loader-card">
+            <div className="spinner-outer-ring">
+              <span className="spinner-center-icon">
+                {ocrScanning ? '🔍' : uploadingPhoto ? '📸' : '🚀'}
+              </span>
+            </div>
+            <h4 className="loader-title">
+              {ocrScanning
+                ? 'Scanning License Plate...'
+                : uploadingPhoto
+                ? 'Uploading Vehicle Photo...'
+                : 'Processing Details...'}
+            </h4>
+            <p className="loader-subtitle">
+              {ocrScanning
+                ? 'AI Vision is reading the registration plate from image'
+                : uploadingPhoto
+                ? 'Compressing & saving inspection photo securely'
+                : 'Connecting to VAHAN database & initializing job'}
+            </p>
+            <div className="loader-progress-bar">
+              <div className="loader-progress-fill" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Top Header Navigation */}
       <div className="mobile-header">
         <div>
@@ -423,41 +487,59 @@ export default function MobileScan() {
             {/* Editable Specs Grid */}
             <div className="mobile-grid-3 mb-12">
               <div>
-                <label className="mobile-sublabel">Brand</label>
+                <label className="mobile-sublabel">Brand <span style={{ color: '#ef4444' }}>*</span></label>
                 <input
                   type="text"
+                  list="mob-brand-list"
                   className="mobile-input-sm"
-                  placeholder="Brand"
+                  placeholder="Select Brand"
                   value={vehicle.brand || ''}
                   onChange={e => updateVehicleField('brand', e.target.value)}
                 />
+                <datalist id="mob-brand-list">
+                  {getBrandsForSegment(vehicle.segment).map(b => (
+                    <option key={b} value={b} />
+                  ))}
+                </datalist>
               </div>
               <div>
-                <label className="mobile-sublabel">Model</label>
+                <label className="mobile-sublabel">Model <span style={{ color: '#ef4444' }}>*</span></label>
                 <input
                   type="text"
+                  list="mob-model-list"
                   className="mobile-input-sm"
-                  placeholder="Model"
+                  placeholder="Select Model"
                   value={vehicle.model || ''}
                   onChange={e => updateVehicleField('model', e.target.value)}
                 />
+                <datalist id="mob-model-list">
+                  {getModelsForBrand(vehicle.brand).map(m => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
               </div>
               <div>
-                <label className="mobile-sublabel">Color</label>
+                <label className="mobile-sublabel">Color <span style={{ color: '#ef4444' }}>*</span></label>
                 <input
                   type="text"
+                  list="mob-color-list"
                   className="mobile-input-sm"
-                  placeholder="Color"
+                  placeholder="Select Color"
                   value={vehicle.color || ''}
                   onChange={e => updateVehicleField('color', e.target.value)}
                 />
+                <datalist id="mob-color-list">
+                  {COMMON_VEHICLE_COLORS.map(c => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
               </div>
             </div>
 
             {/* Customer Name & Phone */}
             <div className="mobile-grid-2 mb-12">
               <div>
-                <label className="mobile-sublabel">Customer Name (Optional)</label>
+                <label className="mobile-sublabel">{customerType === 'workshop' ? 'Workshop Name' : 'Customer Name'} <span style={{ color: '#ef4444' }}>*</span></label>
                 <input
                   type="text"
                   className="mobile-input-sm"
@@ -467,7 +549,7 @@ export default function MobileScan() {
                 />
               </div>
               <div>
-                <label className="mobile-sublabel">Mobile Phone (WhatsApp)</label>
+                <label className="mobile-sublabel">Mobile Phone <span style={{ color: '#ef4444' }}>* (10 digits)</span></label>
                 <input
                   type="tel"
                   className="mobile-input-sm"
