@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
-import { getBrandsForSegment, getModelsForBrand, COMMON_VEHICLE_COLORS } from '../utils/vehicleOptions';
+import { getBrandsForSegment, getModelsForBrand, COMMON_VEHICLE_COLORS, normalizeValue } from '../utils/vehicleOptions';
 
 export default function NewJobModal({ onClose, onCreated }) {
   const [washTypes, setWashTypes] = useState([]);
@@ -563,13 +563,13 @@ return (
                 </label>
                 {(() => {
                   const brands = getBrandsForSegment(vehicle.segment);
-                  const currentBrand = vehicle.brand || '';
-                  const isCustom = customBrandMode || (currentBrand && !brands.includes(currentBrand));
-                  if (!isCustom) {
+                  const rawBrand = vehicle.brand || '';
+                  const displayBrand = normalizeValue(rawBrand, brands);
+                  if (!customBrandMode) {
                     return (
                       <select
                         style={{ fontSize: 13, padding: '8px 10px', width: '100%', borderRadius: 8, border: '1px solid var(--border)', background: 'white' }}
-                        value={currentBrand}
+                        value={displayBrand}
                         onChange={e => {
                           if (e.target.value === '__OTHER__') {
                             setCustomBrandMode(true);
@@ -584,6 +584,9 @@ return (
                         {brands.map(b => (
                           <option key={b} value={b}>{b}</option>
                         ))}
+                        {displayBrand && !brands.includes(displayBrand) && (
+                          <option value={displayBrand}>{displayBrand}</option>
+                        )}
                         <option value="__OTHER__">✏️ + Custom / Other</option>
                       </select>
                     );
@@ -593,7 +596,7 @@ return (
                       <input
                         type="text"
                         placeholder="Brand..."
-                        value={currentBrand}
+                        value={rawBrand}
                         onChange={e => updateVehicleField('brand', e.target.value)}
                         style={{ fontSize: 13, padding: '8px 10px', width: '100%' }}
                         autoFocus
@@ -618,13 +621,13 @@ return (
                 </label>
                 {(() => {
                   const models = getModelsForBrand(vehicle.brand);
-                  const currentModel = vehicle.model || '';
-                  const isCustom = customModelMode || (currentModel && !models.includes(currentModel));
-                  if (!isCustom) {
+                  const rawModel = vehicle.model || '';
+                  const displayModel = normalizeValue(rawModel, models);
+                  if (!customModelMode) {
                     return (
                       <select
                         style={{ fontSize: 13, padding: '8px 10px', width: '100%', borderRadius: 8, border: '1px solid var(--border)', background: 'white' }}
-                        value={currentModel}
+                        value={displayModel}
                         onChange={e => {
                           if (e.target.value === '__OTHER__') {
                             setCustomModelMode(true);
@@ -639,6 +642,9 @@ return (
                         {models.map(m => (
                           <option key={m} value={m}>{m}</option>
                         ))}
+                        {displayModel && !models.includes(displayModel) && (
+                          <option value={displayModel}>{displayModel}</option>
+                        )}
                         <option value="__OTHER__">✏️ + Custom / Other</option>
                       </select>
                     );
@@ -648,7 +654,7 @@ return (
                       <input
                         type="text"
                         placeholder="Model..."
-                        value={currentModel}
+                        value={rawModel}
                         onChange={e => updateVehicleField('model', e.target.value)}
                         style={{ fontSize: 13, padding: '8px 10px', width: '100%' }}
                         autoFocus
@@ -672,13 +678,13 @@ return (
                   Color <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 {(() => {
-                  const currentColor = vehicle.color || '';
-                  const isCustom = customColorMode || (currentColor && !COMMON_VEHICLE_COLORS.includes(currentColor));
-                  if (!isCustom) {
+                  const rawColor = vehicle.color || '';
+                  const displayColor = normalizeValue(rawColor, COMMON_VEHICLE_COLORS);
+                  if (!customColorMode) {
                     return (
                       <select
                         style={{ fontSize: 13, padding: '8px 10px', width: '100%', borderRadius: 8, border: '1px solid var(--border)', background: 'white' }}
-                        value={currentColor}
+                        value={displayColor}
                         onChange={e => {
                           if (e.target.value === '__OTHER__') {
                             setCustomColorMode(true);
@@ -693,6 +699,9 @@ return (
                         {COMMON_VEHICLE_COLORS.map(c => (
                           <option key={c} value={c}>{c}</option>
                         ))}
+                        {displayColor && !COMMON_VEHICLE_COLORS.includes(displayColor) && (
+                          <option value={displayColor}>{displayColor}</option>
+                        )}
                         <option value="__OTHER__">✏️ + Custom / Other</option>
                       </select>
                     );
@@ -702,7 +711,7 @@ return (
                       <input
                         type="text"
                         placeholder="Color..."
-                        value={currentColor}
+                        value={rawColor}
                         onChange={e => updateVehicleField('color', e.target.value)}
                         style={{ fontSize: 13, padding: '8px 10px', width: '100%' }}
                         autoFocus

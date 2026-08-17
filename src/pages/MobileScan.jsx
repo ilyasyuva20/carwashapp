@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { recognizePlateNumber } from '../ocr';
-import { getBrandsForSegment, getModelsForBrand, COMMON_VEHICLE_COLORS } from '../utils/vehicleOptions';
+import { getBrandsForSegment, getModelsForBrand, COMMON_VEHICLE_COLORS, normalizeValue } from '../utils/vehicleOptions';
 
 function compressImage(file, maxWidth = 1000, maxHeight = 1000, quality = 0.75) {
   return new Promise((resolve) => {
@@ -494,14 +494,14 @@ export default function MobileScan() {
                 <label className="mobile-sublabel">Brand <span style={{ color: '#ef4444' }}>*</span></label>
                 {(() => {
                   const brands = getBrandsForSegment(vehicle.segment);
-                  const currentBrand = vehicle.brand || '';
-                  const isCustom = customBrandMode || (currentBrand && !brands.includes(currentBrand));
-                  if (!isCustom) {
+                  const rawBrand = vehicle.brand || '';
+                  const displayBrand = normalizeValue(rawBrand, brands);
+                  if (!customBrandMode) {
                     return (
                       <select
                         className="mobile-select"
                         style={{ padding: '8px 10px', fontSize: 13 }}
-                        value={currentBrand}
+                        value={displayBrand}
                         onChange={e => {
                           if (e.target.value === '__OTHER__') {
                             setCustomBrandMode(true);
@@ -516,6 +516,9 @@ export default function MobileScan() {
                         {brands.map(b => (
                           <option key={b} value={b}>{b}</option>
                         ))}
+                        {displayBrand && !brands.includes(displayBrand) && (
+                          <option value={displayBrand}>{displayBrand}</option>
+                        )}
                         <option value="__OTHER__">✏️ + Custom / Other</option>
                       </select>
                     );
@@ -526,7 +529,7 @@ export default function MobileScan() {
                         type="text"
                         className="mobile-input-sm"
                         placeholder="Brand..."
-                        value={currentBrand}
+                        value={rawBrand}
                         onChange={e => updateVehicleField('brand', e.target.value)}
                         autoFocus
                       />
@@ -548,14 +551,14 @@ export default function MobileScan() {
                 <label className="mobile-sublabel">Model <span style={{ color: '#ef4444' }}>*</span></label>
                 {(() => {
                   const models = getModelsForBrand(vehicle.brand);
-                  const currentModel = vehicle.model || '';
-                  const isCustom = customModelMode || (currentModel && !models.includes(currentModel));
-                  if (!isCustom) {
+                  const rawModel = vehicle.model || '';
+                  const displayModel = normalizeValue(rawModel, models);
+                  if (!customModelMode) {
                     return (
                       <select
                         className="mobile-select"
                         style={{ padding: '8px 10px', fontSize: 13 }}
-                        value={currentModel}
+                        value={displayModel}
                         onChange={e => {
                           if (e.target.value === '__OTHER__') {
                             setCustomModelMode(true);
@@ -570,6 +573,9 @@ export default function MobileScan() {
                         {models.map(m => (
                           <option key={m} value={m}>{m}</option>
                         ))}
+                        {displayModel && !models.includes(displayModel) && (
+                          <option value={displayModel}>{displayModel}</option>
+                        )}
                         <option value="__OTHER__">✏️ + Custom / Other</option>
                       </select>
                     );
@@ -580,7 +586,7 @@ export default function MobileScan() {
                         type="text"
                         className="mobile-input-sm"
                         placeholder="Model..."
-                        value={currentModel}
+                        value={rawModel}
                         onChange={e => updateVehicleField('model', e.target.value)}
                         autoFocus
                       />
@@ -601,14 +607,14 @@ export default function MobileScan() {
               <div>
                 <label className="mobile-sublabel">Color <span style={{ color: '#ef4444' }}>*</span></label>
                 {(() => {
-                  const currentColor = vehicle.color || '';
-                  const isCustom = customColorMode || (currentColor && !COMMON_VEHICLE_COLORS.includes(currentColor));
-                  if (!isCustom) {
+                  const rawColor = vehicle.color || '';
+                  const displayColor = normalizeValue(rawColor, COMMON_VEHICLE_COLORS);
+                  if (!customColorMode) {
                     return (
                       <select
                         className="mobile-select"
                         style={{ padding: '8px 10px', fontSize: 13 }}
-                        value={currentColor}
+                        value={displayColor}
                         onChange={e => {
                           if (e.target.value === '__OTHER__') {
                             setCustomColorMode(true);
@@ -623,6 +629,9 @@ export default function MobileScan() {
                         {COMMON_VEHICLE_COLORS.map(c => (
                           <option key={c} value={c}>{c}</option>
                         ))}
+                        {displayColor && !COMMON_VEHICLE_COLORS.includes(displayColor) && (
+                          <option value={displayColor}>{displayColor}</option>
+                        )}
                         <option value="__OTHER__">✏️ + Custom / Other</option>
                       </select>
                     );
@@ -633,7 +642,7 @@ export default function MobileScan() {
                         type="text"
                         className="mobile-input-sm"
                         placeholder="Color..."
-                        value={currentColor}
+                        value={rawColor}
                         onChange={e => updateVehicleField('color', e.target.value)}
                         autoFocus
                       />

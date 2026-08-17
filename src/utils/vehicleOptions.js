@@ -196,7 +196,17 @@ export function getBrandsForSegment(segment) {
 export function getModelsForBrand(brand) {
   if (!brand) return [];
   const normalized = Object.keys(BRAND_MODELS).find(
-    k => k.toLowerCase() === brand.trim().toLowerCase() || brand.trim().toLowerCase().includes(k.toLowerCase())
+    k => k.toLowerCase() === brand.trim().toLowerCase() || brand.trim().toLowerCase().includes(k.toLowerCase()) || k.toLowerCase().includes(brand.trim().toLowerCase())
   );
   return normalized ? BRAND_MODELS[normalized] : [];
+}
+
+/**
+ * Match a raw string (e.g. from VAHAN or DB) case-insensitively to standard option list
+ */
+export function normalizeValue(val, optionsList = []) {
+  if (!val) return '';
+  const clean = val.trim().toLowerCase();
+  const match = optionsList.find(opt => opt.toLowerCase() === clean || clean.includes(opt.toLowerCase()) || opt.toLowerCase().includes(clean));
+  return match || val;
 }
