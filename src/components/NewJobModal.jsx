@@ -22,6 +22,10 @@ export default function NewJobModal({ onClose, onCreated }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [customBrandMode, setCustomBrandMode] = useState(false);
+  const [customModelMode, setCustomModelMode] = useState(false);
+  const [customColorMode, setCustomColorMode] = useState(false);
+
   useEffect(() => {
     let url = '/wash-types';
     if (customerType === 'workshop') {
@@ -557,57 +561,164 @@ return (
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
                   Brand <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  list="modal-brand-list"
-                  value={vehicle.brand || ''}
-                  onChange={e => updateVehicleField('brand', e.target.value)}
-                  placeholder="e.g. Honda"
-                  style={{ fontSize: 13, padding: '8px 10px' }}
-                />
-                <datalist id="modal-brand-list">
-                  {getBrandsForSegment(vehicle.segment).map(b => (
-                    <option key={b} value={b} />
-                  ))}
-                </datalist>
+                {(() => {
+                  const brands = getBrandsForSegment(vehicle.segment);
+                  const currentBrand = vehicle.brand || '';
+                  const isCustom = customBrandMode || (currentBrand && !brands.includes(currentBrand));
+                  if (!isCustom) {
+                    return (
+                      <select
+                        style={{ fontSize: 13, padding: '8px 10px', width: '100%', borderRadius: 8, border: '1px solid var(--border)', background: 'white' }}
+                        value={currentBrand}
+                        onChange={e => {
+                          if (e.target.value === '__OTHER__') {
+                            setCustomBrandMode(true);
+                            updateVehicleField('brand', '');
+                          } else {
+                            setCustomBrandMode(false);
+                            updateVehicleField('brand', e.target.value);
+                          }
+                        }}
+                      >
+                        <option value="">-- Select Brand --</option>
+                        {brands.map(b => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                        <option value="__OTHER__">✏️ + Custom / Other</option>
+                      </select>
+                    );
+                  }
+                  return (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <input
+                        type="text"
+                        placeholder="Brand..."
+                        value={currentBrand}
+                        onChange={e => updateVehicleField('brand', e.target.value)}
+                        style={{ fontSize: 13, padding: '8px 10px', width: '100%' }}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                        onClick={() => { setCustomBrandMode(false); updateVehicleField('brand', ''); }}
+                        title="Back to list"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
                   Model <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  list="modal-model-list"
-                  value={vehicle.model || ''}
-                  onChange={e => updateVehicleField('model', e.target.value)}
-                  placeholder="e.g. City / Activa"
-                  style={{ fontSize: 13, padding: '8px 10px' }}
-                />
-                <datalist id="modal-model-list">
-                  {getModelsForBrand(vehicle.brand).map(m => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
+                {(() => {
+                  const models = getModelsForBrand(vehicle.brand);
+                  const currentModel = vehicle.model || '';
+                  const isCustom = customModelMode || (currentModel && !models.includes(currentModel));
+                  if (!isCustom) {
+                    return (
+                      <select
+                        style={{ fontSize: 13, padding: '8px 10px', width: '100%', borderRadius: 8, border: '1px solid var(--border)', background: 'white' }}
+                        value={currentModel}
+                        onChange={e => {
+                          if (e.target.value === '__OTHER__') {
+                            setCustomModelMode(true);
+                            updateVehicleField('model', '');
+                          } else {
+                            setCustomModelMode(false);
+                            updateVehicleField('model', e.target.value);
+                          }
+                        }}
+                      >
+                        <option value="">-- Select Model --</option>
+                        {models.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                        <option value="__OTHER__">✏️ + Custom / Other</option>
+                      </select>
+                    );
+                  }
+                  return (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <input
+                        type="text"
+                        placeholder="Model..."
+                        value={currentModel}
+                        onChange={e => updateVehicleField('model', e.target.value)}
+                        style={{ fontSize: 13, padding: '8px 10px', width: '100%' }}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                        onClick={() => { setCustomModelMode(false); updateVehicleField('model', ''); }}
+                        title="Back to list"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
                   Color <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  list="modal-color-list"
-                  value={vehicle.color || ''}
-                  onChange={e => updateVehicleField('color', e.target.value)}
-                  placeholder="e.g. Cherry Red"
-                  style={{ fontSize: 13, padding: '8px 10px' }}
-                />
-                <datalist id="modal-color-list">
-                  {COMMON_VEHICLE_COLORS.map(c => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
+                {(() => {
+                  const currentColor = vehicle.color || '';
+                  const isCustom = customColorMode || (currentColor && !COMMON_VEHICLE_COLORS.includes(currentColor));
+                  if (!isCustom) {
+                    return (
+                      <select
+                        style={{ fontSize: 13, padding: '8px 10px', width: '100%', borderRadius: 8, border: '1px solid var(--border)', background: 'white' }}
+                        value={currentColor}
+                        onChange={e => {
+                          if (e.target.value === '__OTHER__') {
+                            setCustomColorMode(true);
+                            updateVehicleField('color', '');
+                          } else {
+                            setCustomColorMode(false);
+                            updateVehicleField('color', e.target.value);
+                          }
+                        }}
+                      >
+                        <option value="">-- Select Color --</option>
+                        {COMMON_VEHICLE_COLORS.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                        <option value="__OTHER__">✏️ + Custom / Other</option>
+                      </select>
+                    );
+                  }
+                  return (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <input
+                        type="text"
+                        placeholder="Color..."
+                        value={currentColor}
+                        onChange={e => updateVehicleField('color', e.target.value)}
+                        style={{ fontSize: 13, padding: '8px 10px', width: '100%' }}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                        onClick={() => { setCustomColorMode(false); updateVehicleField('color', ''); }}
+                        title="Back to list"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>

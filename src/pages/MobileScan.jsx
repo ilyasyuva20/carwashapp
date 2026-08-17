@@ -78,6 +78,10 @@ export default function MobileScan() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  const [customBrandMode, setCustomBrandMode] = useState(false);
+  const [customModelMode, setCustomModelMode] = useState(false);
+  const [customColorMode, setCustomColorMode] = useState(false);
+
   useEffect(() => {
     let url = '/wash-types';
     if (customerType === 'workshop') {
@@ -488,51 +492,163 @@ export default function MobileScan() {
             <div className="mobile-grid-3 mb-12">
               <div>
                 <label className="mobile-sublabel">Brand <span style={{ color: '#ef4444' }}>*</span></label>
-                <input
-                  type="text"
-                  list="mob-brand-list"
-                  className="mobile-input-sm"
-                  placeholder="Select Brand"
-                  value={vehicle.brand || ''}
-                  onChange={e => updateVehicleField('brand', e.target.value)}
-                />
-                <datalist id="mob-brand-list">
-                  {getBrandsForSegment(vehicle.segment).map(b => (
-                    <option key={b} value={b} />
-                  ))}
-                </datalist>
+                {(() => {
+                  const brands = getBrandsForSegment(vehicle.segment);
+                  const currentBrand = vehicle.brand || '';
+                  const isCustom = customBrandMode || (currentBrand && !brands.includes(currentBrand));
+                  if (!isCustom) {
+                    return (
+                      <select
+                        className="mobile-select"
+                        style={{ padding: '8px 10px', fontSize: 13 }}
+                        value={currentBrand}
+                        onChange={e => {
+                          if (e.target.value === '__OTHER__') {
+                            setCustomBrandMode(true);
+                            updateVehicleField('brand', '');
+                          } else {
+                            setCustomBrandMode(false);
+                            updateVehicleField('brand', e.target.value);
+                          }
+                        }}
+                      >
+                        <option value="">-- Select Brand --</option>
+                        {brands.map(b => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                        <option value="__OTHER__">✏️ + Custom / Other</option>
+                      </select>
+                    );
+                  }
+                  return (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <input
+                        type="text"
+                        className="mobile-input-sm"
+                        placeholder="Brand..."
+                        value={currentBrand}
+                        onChange={e => updateVehicleField('brand', e.target.value)}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                        onClick={() => { setCustomBrandMode(false); updateVehicleField('brand', ''); }}
+                        title="Back to list"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
+
               <div>
                 <label className="mobile-sublabel">Model <span style={{ color: '#ef4444' }}>*</span></label>
-                <input
-                  type="text"
-                  list="mob-model-list"
-                  className="mobile-input-sm"
-                  placeholder="Select Model"
-                  value={vehicle.model || ''}
-                  onChange={e => updateVehicleField('model', e.target.value)}
-                />
-                <datalist id="mob-model-list">
-                  {getModelsForBrand(vehicle.brand).map(m => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
+                {(() => {
+                  const models = getModelsForBrand(vehicle.brand);
+                  const currentModel = vehicle.model || '';
+                  const isCustom = customModelMode || (currentModel && !models.includes(currentModel));
+                  if (!isCustom) {
+                    return (
+                      <select
+                        className="mobile-select"
+                        style={{ padding: '8px 10px', fontSize: 13 }}
+                        value={currentModel}
+                        onChange={e => {
+                          if (e.target.value === '__OTHER__') {
+                            setCustomModelMode(true);
+                            updateVehicleField('model', '');
+                          } else {
+                            setCustomModelMode(false);
+                            updateVehicleField('model', e.target.value);
+                          }
+                        }}
+                      >
+                        <option value="">-- Select Model --</option>
+                        {models.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                        <option value="__OTHER__">✏️ + Custom / Other</option>
+                      </select>
+                    );
+                  }
+                  return (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <input
+                        type="text"
+                        className="mobile-input-sm"
+                        placeholder="Model..."
+                        value={currentModel}
+                        onChange={e => updateVehicleField('model', e.target.value)}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                        onClick={() => { setCustomModelMode(false); updateVehicleField('model', ''); }}
+                        title="Back to list"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
+
               <div>
                 <label className="mobile-sublabel">Color <span style={{ color: '#ef4444' }}>*</span></label>
-                <input
-                  type="text"
-                  list="mob-color-list"
-                  className="mobile-input-sm"
-                  placeholder="Select Color"
-                  value={vehicle.color || ''}
-                  onChange={e => updateVehicleField('color', e.target.value)}
-                />
-                <datalist id="mob-color-list">
-                  {COMMON_VEHICLE_COLORS.map(c => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
+                {(() => {
+                  const currentColor = vehicle.color || '';
+                  const isCustom = customColorMode || (currentColor && !COMMON_VEHICLE_COLORS.includes(currentColor));
+                  if (!isCustom) {
+                    return (
+                      <select
+                        className="mobile-select"
+                        style={{ padding: '8px 10px', fontSize: 13 }}
+                        value={currentColor}
+                        onChange={e => {
+                          if (e.target.value === '__OTHER__') {
+                            setCustomColorMode(true);
+                            updateVehicleField('color', '');
+                          } else {
+                            setCustomColorMode(false);
+                            updateVehicleField('color', e.target.value);
+                          }
+                        }}
+                      >
+                        <option value="">-- Select Color --</option>
+                        {COMMON_VEHICLE_COLORS.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                        <option value="__OTHER__">✏️ + Custom / Other</option>
+                      </select>
+                    );
+                  }
+                  return (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <input
+                        type="text"
+                        className="mobile-input-sm"
+                        placeholder="Color..."
+                        value={currentColor}
+                        onChange={e => updateVehicleField('color', e.target.value)}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                        onClick={() => { setCustomColorMode(false); updateVehicleField('color', ''); }}
+                        title="Back to list"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
