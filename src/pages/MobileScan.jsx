@@ -358,7 +358,10 @@ export default function MobileScan() {
         </div>
         <div className="mobile-header-actions">
           <Link to="/mobile/jobs" className="mobile-nav-btn active-queue-btn">
-            📋 Active Jobs
+            📋 Jobs
+          </Link>
+          <Link to="/mobile/bills" className="mobile-nav-btn">
+            🧾 Bills
           </Link>
         </div>
       </div>

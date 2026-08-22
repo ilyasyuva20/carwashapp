@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 
 function formatTimeAMPM(dateStr) {
@@ -31,6 +31,7 @@ function getImageUrl(url) {
 }
 
 export default function MobileJobs() {
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -60,6 +61,9 @@ export default function MobileJobs() {
     try {
       await api.post(`/jobs/${jobId}/complete`);
       fetchRunningJobs();
+      if (window.confirm('Wash completed! Would you like to collect payment (Cash/GPay) now?')) {
+        navigate('/mobile/bills');
+      }
     } catch (err) {
       alert('Failed to complete job: ' + err.message);
     } finally {
@@ -81,14 +85,19 @@ export default function MobileJobs() {
           </div>
         </div>
 
-        <button
-          type="button"
-          className="mobile-refresh-icon-btn"
-          onClick={fetchRunningJobs}
-          title="Refresh Queue"
-        >
-          🔄
-        </button>
+        <div className="mobile-header-actions">
+          <Link to="/mobile/bills" className="mobile-nav-btn">
+            🧾 Bills
+          </Link>
+          <button
+            type="button"
+            className="mobile-refresh-icon-btn"
+            onClick={fetchRunningJobs}
+            title="Refresh Queue"
+          >
+            🔄
+          </button>
+        </div>
       </div>
 
       <div className="mobile-body">

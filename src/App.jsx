@@ -15,6 +15,7 @@ import Workshops from './pages/Workshops.jsx';
 import SalaryAdvances from './pages/SalaryAdvances.jsx';
 import MobileScan from './pages/MobileScan.jsx';
 import MobileJobs from './pages/MobileJobs.jsx';
+import MobileBills from './pages/MobileBills.jsx';
 
 export default function App() {
   const location = useLocation();
@@ -26,6 +27,7 @@ export default function App() {
         <Routes>
           <Route path="/mobile" element={<MobileScan />} />
           <Route path="/mobile/jobs" element={<MobileJobs />} />
+          <Route path="/mobile/bills" element={<MobileBills />} />
         </Routes>
       </div>
     );
@@ -51,6 +53,7 @@ export default function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/mobile" element={<MobileScan />} />
           <Route path="/mobile/jobs" element={<MobileJobs />} />
+          <Route path="/mobile/bills" element={<MobileBills />} />
         </Routes>
       </div>
     </div>
