@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import MobileBottomNav from '../components/MobileBottomNav';
 
 function formatTimeAMPM(dateStr) {
   if (!dateStr) return '';
@@ -60,10 +61,7 @@ export default function MobileJobs() {
     setCompletingId(jobId);
     try {
       await api.post(`/jobs/${jobId}/complete`);
-      fetchRunningJobs();
-      if (window.confirm('Wash completed! Would you like to collect payment (Cash/GPay) now?')) {
-        navigate('/mobile/bills');
-      }
+      await fetchRunningJobs();
     } catch (err) {
       alert('Failed to complete job: ' + err.message);
     } finally {
@@ -75,28 +73,9 @@ export default function MobileJobs() {
     <div className="mobile-container">
       {/* Top Header */}
       <div className="mobile-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link to="/mobile" className="mobile-back-btn">
-            ⬅ Scan
-          </Link>
-          <div>
-            <h2 className="mobile-title">📋 Active Jobs Queue</h2>
-            <span className="mobile-subtitle">{jobs.length} Vehicle{jobs.length !== 1 ? 's' : ''} in Wash Bay</span>
-          </div>
-        </div>
-
-        <div className="mobile-header-actions">
-          <Link to="/mobile/bills" className="mobile-nav-btn">
-            🧾 Bills
-          </Link>
-          <button
-            type="button"
-            className="mobile-refresh-icon-btn"
-            onClick={fetchRunningJobs}
-            title="Refresh Queue"
-          >
-            🔄
-          </button>
+        <div>
+          <h2 className="mobile-title">Active jobs</h2>
+          <span className="mobile-subtitle">{jobs.length} vehicle{jobs.length !== 1 ? 's' : ''} currently in the wash bay</span>
         </div>
       </div>
 
@@ -214,6 +193,7 @@ export default function MobileJobs() {
           </div>
         )}
       </div>
+      <MobileBottomNav />
     </div>
   );
 }

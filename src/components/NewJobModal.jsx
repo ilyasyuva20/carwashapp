@@ -19,6 +19,9 @@ export default function NewJobModal({ onClose, onCreated }) {
   const [workshopId, setWorkshopId] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('unsettled'); // 'unsettled' | 'settled'
 
+  const [offerPrice, setOfferPrice] = useState('');
+  const [userEditedPrice, setUserEditedPrice] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -56,6 +59,11 @@ const REGEX_PLATE = /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$|^[0-9]{2}BH[0-9]{4}[
     setError('');
     try {
       const v = await api.get(`/vehicles/lookup/${cleanReg}`);
+      if (v.not_found) {
+        setVehicle(null);
+        setError('Vehicle details were not returned. Please retry after the vehicle lookup service is updated.');
+        return;
+      }
       setVehicle(v);
       setRegNumber(cleanReg);
       if (v.phone) {
@@ -240,6 +248,11 @@ function getImageUrl(url) {
       setError('Please select a wash package for the car');
       return;
     }
+
+    const finalOfferPrice = (offerPrice !== '' && !isNaN(Number(offerPrice)))
+      ? Number(offerPrice)
+      : (calculatedTotalPrice !== null ? calculatedTotalPrice : 0);
+
     setLoading(true);
     setError('');
     try {
@@ -253,6 +266,7 @@ function getImageUrl(url) {
         before_photos: beforePhotos.filter(Boolean),
         has_chain_lube: isBike ? hasChainLube : false,
         chain_lube_price: dynamicLubePrice,
+        offer_price: finalOfferPrice,
         customer_type: customerType,
         workshop_id: (customerType === 'workshop' && workshopId) ? parseInt(workshopId) : null,
         payment_status: paymentStatus
@@ -280,7 +294,13 @@ function getImageUrl(url) {
     }
   }
 
-  const totalPrice = baseWashPrice !== null ? (baseWashPrice + (isBike && hasChainLube ? dynamicLubePrice : 0)) : null;
+  const calculatedTotalPrice = baseWashPrice !== null ? (baseWashPrice + (isBike && hasChainLube ? dynamicLubePrice : 0)) : null;
+
+  useEffect(() => {
+    if (!userEditedPrice) {
+      setOfferPrice(calculatedTotalPrice !== null ? String(calculatedTotalPrice) : '');
+    }
+  }, [calculatedTotalPrice, userEditedPrice]);
 
 return (
     <div
@@ -848,34 +868,32 @@ return (
             {isBike && (
               <div
                 style={{
-                  background: '#f3e8ff',
-                  border: '1.5px solid #c084fc',
+                  background: hasChainLube ? '#f3e8ff' : '#f8fafc',
+                  border: hasChainLube ? '2px solid #9333ea' : '1.5px solid #cbd5e1',
                   padding: '12px 16px',
                   borderRadius: 12,
                   marginBottom: 16,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: hasChainLube ? '0 2px 8px rgba(147, 51, 234, 0.15)' : 'none'
                 }}
                 onClick={() => setHasChainLube(!hasChainLube)}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 20 }}>⚙️</span>
                   <div>
-                    <strong style={{ fontSize: 14, color: '#581c87', display: 'block' }}>Add Chain Lube Service</strong>
-                    <span style={{ fontSize: 12, color: '#7e22ce' }}>Recommended extra care for gear bikes</span>
+                    <strong style={{ fontSize: 14, color: hasChainLube ? '#581c87' : '#1e293b', display: 'block' }}>Add Chain Lube Service</strong>
+                    <span style={{ fontSize: 12, color: hasChainLube ? '#7e22ce' : '#64748b' }}>Recommended extra care for gear bikes</span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <strong style={{ fontSize: 14, color: '#6b21a8' }}>+ ₹{dynamicLubePrice}</strong>
-                  <input
-                    type="checkbox"
-                    checked={hasChainLube}
-                    onChange={e => setHasChainLube(e.target.checked)}
-                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#9333ea' }}
-                    onClick={e => e.stopPropagation()}
-                  />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <strong style={{ fontSize: 14, color: hasChainLube ? '#6b21a8' : '#475569' }}>+ ₹{dynamicLubePrice}</strong>
+                  <div className={`lube-checkbox-icon ${hasChainLube ? 'active' : ''}`}>
+                    {hasChainLube && '✓'}
+                  </div>
                 </div>
               </div>
             )}
@@ -925,37 +943,63 @@ return (
               </div>
             </div>
 
-            {/* Total Price Summary Box */}
-            {totalPrice !== null && (
-              <div
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: 12,
-                  padding: '14px 18px',
-                  marginBottom: 16,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}
-              >
+            {/* Editable Total Price / Offer Price Box */}
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1.5px solid #cbd5e1',
+                borderRadius: 12,
+                padding: '14px 18px',
+                marginBottom: 16
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase' }}>
-                    Calculated Total
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>
+                    Total Amount (Offer Price)
                   </span>
-                  <div style={{ fontSize: 13, color: '#475569', marginTop: 2 }}>
-                    {isBike && `Bike Wash (₹300)${hasChainLube ? ' + Chain Lube (₹100)' : ''}`}
+                  <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+                    Standard: {isBike && `Bike Wash (₹300)${hasChainLube ? ' + Chain Lube (₹100)' : ''}`}
                     {isScooter && 'Scooter Wash (Fixed ₹250)'}
                     {isCar && washTypes.find(w => w.id === parseInt(washTypeId))?.name}
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--primary)' }}>
-                    ₹{totalPrice}
-                  </span>
-                </div>
+                {userEditedPrice && calculatedTotalPrice !== null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOfferPrice(String(calculatedTotalPrice));
+                      setUserEditedPrice(false);
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: 12, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Reset to ₹{calculatedTotalPrice}
+                  </button>
+                )}
               </div>
-            )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--primary)' }}>₹</span>
+                <input
+                  type="number"
+                  placeholder={calculatedTotalPrice !== null ? String(calculatedTotalPrice) : 'Enter amount'}
+                  value={offerPrice}
+                  onChange={e => {
+                    setOfferPrice(e.target.value);
+                    setUserEditedPrice(true);
+                  }}
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 800,
+                    color: 'var(--primary)',
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '2px solid var(--primary)',
+                    width: '100%',
+                    background: '#ffffff'
+                  }}
+                />
+              </div>
+            </div>
           </>
         )}
 

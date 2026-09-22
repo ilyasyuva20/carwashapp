@@ -88,125 +88,74 @@ export default function RunningJobs() {
   });
 
   return (
-    <div style={{ padding: '24px 32px', maxWidth: 1200, margin: '0 auto' }}>
+    <div className="running-jobs-page">
       {/* Top Header & Primary Action */}
-      <div className="flex between center mb-24" style={{ flexWrap: 'wrap', gap: 16 }}>
+      <div className="running-jobs-header">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a' }}>
-              🚿 Currently Washing
-            </h1>
-            <span
-              style={{
-                background: runningJobs.length > 0 ? '#fef3c7' : '#f1f5f9',
-                color: runningJobs.length > 0 ? '#d97706' : '#64748b',
-                border: `1px solid ${runningJobs.length > 0 ? '#fcd34d' : '#cbd5e1'}`,
-                padding: '4px 14px',
-                borderRadius: 20,
-                fontSize: 14,
-                fontWeight: 700
-              }}
-            >
-              {runningJobs.length} Vehicle{runningJobs.length !== 1 ? 's' : ''} in Wash Bay
-            </span>
+          <div className="running-jobs-title-row">
+            <span className="section-icon" aria-hidden="true">W</span>
+            <h1>Wash bay queue</h1>
+            <span className="queue-count">{runningJobs.length} active</span>
           </div>
-          <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: 14 }}>
-            Live queue of vehicles actively in progress. Mark completed when ready.
-          </p>
+          <p className="running-jobs-subtitle">Monitor active services and close each job when the vehicle is ready.</p>
         </div>
 
         <button
-          className="btn btn-primary"
           onClick={() => setShowNewModal(true)}
-          style={{
-            padding: '12px 24px',
-            fontSize: 15,
-            fontWeight: 700,
-            borderRadius: 12,
-            boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-          }}
+          className="btn btn-primary running-jobs-new"
         >
-          <span style={{ fontSize: 18 }}>➕</span> New Job Entry
+          <span aria-hidden="true">+</span> New wash job
         </button>
       </div>
 
       {/* Filter / Refresh Bar */}
       <div
-        className="card mb-24"
-        style={{
-          padding: '14px 20px',
-          background: '#fff',
-          borderRadius: 14,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 16,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-        }}
+        className="running-jobs-toolbar"
       >
-        <div style={{ flex: 1, maxWidth: 400 }}>
+        <div className="running-jobs-search">
+          <span aria-hidden="true">⌕</span>
           <input
             type="text"
-            placeholder="🔍 Search vehicle no, phone, brand/model..."
+            placeholder="Search registration, phone, brand or model"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              fontSize: 14,
-              borderRadius: 8,
-              border: '1px solid var(--border)'
-            }}
           />
         </div>
 
         <button
-          className="btn btn-secondary"
           onClick={fetchRunningJobs}
-          style={{ padding: '9px 16px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+          className="btn btn-secondary running-jobs-refresh"
+          title="Refresh queue"
         >
-          <span>🔄</span> Refresh Queue
+          <span aria-hidden="true">↻</span> Refresh
         </button>
       </div>
 
       {/* Running Vehicles Grid */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>🌀</div>
-          Loading in-progress wash queue...
+        <div className="running-jobs-state">
+          <div className="state-icon" aria-hidden="true">W</div>
+          Loading active jobs...
         </div>
       ) : error ? (
-        <div style={{ padding: 20, background: '#fef2f2', color: '#dc2626', borderRadius: 12, border: '1px solid #fecaca' }}>
-          ❌ {error}
+        <div className="running-jobs-error">
+          <strong>Unable to load queue</strong><span>{error}</span>
         </div>
       ) : filteredJobs.length === 0 ? (
-        <div
-          className="card"
-          style={{
-            textAlign: 'center',
-            padding: '60px 20px',
-            background: '#fff',
-            borderRadius: 16,
-            border: '2px dashed #cbd5e1'
-          }}
-        >
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🚗✨</div>
-          <h3 style={{ margin: '0 0 8px', fontSize: 20, color: '#1e293b' }}>
+        <div className="running-jobs-empty">
+          <div className="empty-icon" aria-hidden="true">W</div>
+          <h3>
             {search ? 'No matching running jobs found' : 'No Vehicles Currently Washing'}
           </h3>
-          <p style={{ margin: '0 0 20px', color: 'var(--muted)', fontSize: 14 }}>
+          <p>
             {search ? 'Try clearing your search query.' : 'There are no active jobs in progress in the wash bay.'}
           </p>
           {!search && (
             <button
-              className="btn btn-primary"
               onClick={() => setShowNewModal(true)}
-              style={{ padding: '12px 20px', fontSize: 14, fontWeight: 600 }}
+              className="btn btn-primary"
             >
-              ➕ Start New Wash Job
+              + Start new wash job
             </button>
           )}
         </div>
@@ -215,7 +164,7 @@ export default function RunningJobs() {
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-            gap: 20
+            gap: 16
           }}
         >
           {filteredJobs.map(job => {
@@ -241,10 +190,10 @@ export default function RunningJobs() {
                 className="card"
                 style={{
                   background: '#fff',
-                  borderRadius: 16,
-                  padding: 20,
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
-                  border: '1.5px solid #cbd5e1',
+                  borderRadius: 12,
+                  padding: 18,
+                  boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
+                  border: '1px solid var(--border)',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between'
@@ -265,12 +214,12 @@ export default function RunningJobs() {
                       }}
                     >
                       {job.customer_type === 'workshop'
-                        ? `🏭 ${workshopName || 'Workshop'}`
-                        : '👤 Retail Customer'}
+                        ? `Workshop: ${workshopName || 'Workshop'}`
+                        : 'Retail customer'}
                     </span>
 
                     <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>
-                      🕒 Started {formatTimeAMPM(entryTime)}
+                      Started {formatTimeAMPM(entryTime)}
                       {elapsed !== null && ` (${elapsed}m ago)`}
                     </span>
                   </div>
@@ -294,7 +243,7 @@ export default function RunningJobs() {
                   {/* Vehicle & Wash Package Details */}
                   <div style={{ fontSize: 14, color: '#334155', marginBottom: 16 }}>
                     <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>{isBike ? '🏍️' : isScooter ? '🛵' : '🚗'}</span>
+                      <span className="vehicle-type-icon" aria-hidden="true">{isBike ? 'B' : isScooter ? 'S' : 'C'}</span>
                       <span>
                         {brand} {model}
                       </span>
@@ -306,17 +255,17 @@ export default function RunningJobs() {
                     </div>
 
                     <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 6 }}>
-                      Package: <strong style={{ color: '#0f172a' }}>{washName}</strong>
+                      Package <strong style={{ color: '#0f172a' }}>{washName}</strong>
                       {job.has_chain_lube === 1 && (
                         <span style={{ background: '#f3e8ff', color: '#7e22ce', padding: '2px 6px', borderRadius: 4, marginLeft: 6, fontSize: 11, fontWeight: 600 }}>
-                          + ⚙️ Chain Lube
+                          + Chain lube
                         </span>
                       )}
                     </div>
 
                     {phone && (
                       <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-                        📞 Contact: <a href={`tel:${phone}`} style={{ color: '#0284c7', fontWeight: 600, textDecoration: 'none' }}>{phone}</a>
+                        Contact <a href={`tel:${phone}`} style={{ color: '#0284c7', fontWeight: 600, textDecoration: 'none' }}>{phone}</a>
                       </div>
                     )}
                   </div>
@@ -353,7 +302,7 @@ export default function RunningJobs() {
                         gap: 6
                       }}
                     >
-                      {completingId === job.id ? 'Saving...' : '✓ Complete Wash'}
+                      {completingId === job.id ? 'Saving...' : 'Complete wash'}
                     </button>
 
                     <button
@@ -368,7 +317,7 @@ export default function RunningJobs() {
                       }}
                       title="Cancel Job"
                     >
-                      ✕
+                      <span aria-hidden="true">×</span>
                     </button>
                   </div>
                 </div>

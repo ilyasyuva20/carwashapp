@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import MobileBottomNav from '../components/MobileBottomNav';
 
 function formatDateTime(dateStr) {
   if (!dateStr) return '-';
@@ -21,7 +22,7 @@ export default function MobileBills() {
     summary: { total_cars: 0, total_bikes: 0, total_vehicles: 0, total_amount: 0, unpaid_amount: 0, paid_amount: 0 },
     jobs: []
   });
-  const [paymentFilter, setPaymentFilter] = useState('all'); // all, unpaid, paid
+  const [paymentFilter] = useState('unpaid');
   const [segmentFilter, setSegmentFilter] = useState('all'); // all, car, bike
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -33,7 +34,8 @@ export default function MobileBills() {
   const fetchBills = useCallback(async () => {
     setLoading(true);
     try {
-      let params = `?segment=${segmentFilter}&payment_status=${paymentFilter}`;
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let params = `?date=${todayStr}&segment=${segmentFilter}&payment_status=${paymentFilter}`;
       if (searchQuery.trim()) {
         params += `&q=${encodeURIComponent(searchQuery.trim())}`;
       }
@@ -65,34 +67,35 @@ export default function MobileBills() {
   }
 
   const jobsList = data.jobs || [];
-  const summary = data.summary || { total_cars: 0, total_bikes: 0, total_vehicles: 0, total_amount: 0, unpaid_amount: 0, paid_amount: 0 };
+  const rawSummary = data.summary || {};
+
+  const unpaidCarsCount = (rawSummary.unpaid_cars !== undefined && rawSummary.unpaid_cars > 0)
+    ? rawSummary.unpaid_cars
+    : (jobsList.length === 0 ? (rawSummary.unpaid_cars ?? 0) : jobsList.filter(j => j.vehicle?.segment !== 'bike' && j.vehicle?.segment !== 'scooter').length);
+
+  const unpaidBikesCount = (rawSummary.unpaid_bikes !== undefined && rawSummary.unpaid_bikes > 0)
+    ? rawSummary.unpaid_bikes
+    : (jobsList.length === 0 ? (rawSummary.unpaid_bikes ?? 0) : jobsList.filter(j => j.vehicle?.segment === 'bike' || j.vehicle?.segment === 'scooter').length);
+
+  const unpaidTotalCount = (rawSummary.unpaid_vehicles !== undefined && rawSummary.unpaid_vehicles > 0)
+    ? rawSummary.unpaid_vehicles
+    : (jobsList.length === 0 ? (rawSummary.unpaid_vehicles ?? 0) : jobsList.length);
+
+  const paidCarsCount = (rawSummary.paid_cars !== undefined && rawSummary.paid_cars > 0)
+    ? rawSummary.paid_cars
+    : Math.max(0, (rawSummary.total_cars || 0) - unpaidCarsCount);
+
+  const paidBikesCount = (rawSummary.paid_bikes !== undefined && rawSummary.paid_bikes > 0)
+    ? rawSummary.paid_bikes
+    : Math.max(0, (rawSummary.total_bikes || 0) - unpaidBikesCount);
 
   return (
     <div className="mobile-container">
       {/* Mobile Top Header Navigation */}
       <div className="mobile-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link to="/mobile" className="mobile-back-btn">
-            ⬅ Scan
-          </Link>
-          <div>
-            <h2 className="mobile-title">🧾 Mobile Bills</h2>
-            <span className="mobile-subtitle">Generate & Collect Payments</span>
-          </div>
-        </div>
-
-        <div className="mobile-header-actions">
-          <Link to="/mobile/jobs" className="mobile-nav-btn">
-            📋 Queue
-          </Link>
-          <button
-            type="button"
-            className="mobile-refresh-icon-btn"
-            onClick={fetchBills}
-            title="Refresh Bills"
-          >
-            🔄
-          </button>
+        <div>
+          <h2 className="mobile-title">Bills</h2>
+          <span className="mobile-subtitle">Generate and collect payments</span>
         </div>
       </div>
 
@@ -105,17 +108,27 @@ export default function MobileBills() {
               ⏳ Pending Payment
             </div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#9f1239', marginTop: 2 }}>
-              ₹{(summary.unpaid_amount || 0).toLocaleString()}
+              ₹{(rawSummary.unpaid_amount || 0).toLocaleString()}
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#be123c', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>🚗 {unpaidCarsCount}</span>
+              <span style={{ opacity: 0.4 }}>|</span>
+              <span>🏍️ {unpaidBikesCount}</span>
             </div>
           </div>
 
           {/* Paid KPI */}
           <div style={{ background: '#f0f9ff', border: '1.5px solid #bae6fd', borderRadius: 14, padding: '12px 14px' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              ✅ Settled Amount
+              ✅ Settled Amount Today
             </div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#0369a1', marginTop: 2 }}>
-              ₹{(summary.paid_amount || 0).toLocaleString()}
+              ₹{(rawSummary.paid_amount || 0).toLocaleString()}
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#0284c7', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>🚗 {paidCarsCount}</span>
+              <span style={{ opacity: 0.4 }}>|</span>
+              <span>🏍️ {paidBikesCount}</span>
             </div>
           </div>
         </div>
@@ -149,9 +162,9 @@ export default function MobileBills() {
           {/* Filter Segment Tabs */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
             {[
-              { id: 'all', label: `All (${summary.total_vehicles || 0})` },
-              { id: 'car', label: `🚗 Cars (${summary.total_cars || 0})` },
-              { id: 'bike', label: `🏍️ Bikes (${summary.total_bikes || 0})` }
+              { id: 'all', label: `All (${unpaidTotalCount})` },
+              { id: 'car', label: `🚗 Cars (${unpaidCarsCount})` },
+              { id: 'bike', label: `🏍️ Bikes (${unpaidBikesCount})` }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -173,31 +186,8 @@ export default function MobileBills() {
             ))}
           </div>
 
-          {/* Payment Status Tabs */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 8 }}>
-            {[
-              { id: 'all', label: 'All Status' },
-              { id: 'unpaid', label: '⏳ Unpaid' },
-              { id: 'paid', label: '✅ Paid' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setPaymentFilter(tab.id)}
-                style={{
-                  padding: '6px 4px',
-                  borderRadius: 8,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  border: paymentFilter === tab.id ? '1.5px solid #0d9488' : '1px solid #cbd5e1',
-                  background: paymentFilter === tab.id ? '#ccfbf1' : '#ffffff',
-                  color: paymentFilter === tab.id ? '#0f766e' : '#475569'
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="mobile-bills-filter-note">
+            Showing completed washes awaiting payment
           </div>
         </div>
 
@@ -205,15 +195,15 @@ export default function MobileBills() {
         {loading && jobsList.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '50px 0', color: '#64748b' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🌀</div>
-            Loading completed customer bills...
+            Loading customer bills...
           </div>
         ) : error ? (
           <div className="mobile-alert error">❌ {error}</div>
         ) : jobsList.length === 0 ? (
           <div className="mobile-empty-state">
             <div style={{ fontSize: 44, marginBottom: 12 }}>🧾✨</div>
-            <h3>No Completed Customer Bills</h3>
-            <p>Completed retail wash jobs will appear here for payment settlement.</p>
+            <h3>No Customer Bills</h3>
+            <p>Completed washes awaiting payment will appear here.</p>
           </div>
         ) : (
           <div className="mobile-jobs-list">
@@ -399,6 +389,7 @@ export default function MobileBills() {
           onClose={() => setSelectedReceiptJob(null)}
         />
       )}
+      <MobileBottomNav />
     </div>
   );
 }

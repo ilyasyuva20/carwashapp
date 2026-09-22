@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import MobileBottomNav from '../components/MobileBottomNav';
 import { recognizePlateNumber } from '../ocr';
 import { getBrandsForSegment, getModelsForBrand, COMMON_VEHICLE_COLORS, normalizeValue } from '../utils/vehicleOptions';
 
@@ -73,6 +74,9 @@ export default function MobileScan() {
   const [beforePhotos, setBeforePhotos] = useState([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
+  const [offerPrice, setOfferPrice] = useState('');
+  const [userEditedPrice, setUserEditedPrice] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [ocrScanning, setOcrScanning] = useState(false);
   const [error, setError] = useState('');
@@ -139,6 +143,11 @@ export default function MobileScan() {
     setError('');
     try {
       const v = await api.get(`/vehicles/lookup/${target}`);
+      if (v.not_found) {
+        setVehicle(null);
+        setError('Vehicle details were not returned. Please retry after the vehicle lookup service is updated.');
+        return;
+      }
       setVehicle(v);
       setRegNumber(target);
       if (v.phone) setPhone(v.phone);
@@ -246,7 +255,13 @@ export default function MobileScan() {
     }
   }
 
-  const totalPrice = baseWashPrice !== null ? (baseWashPrice + (isBike && hasChainLube ? dynamicLubePrice : 0)) : null;
+  const calculatedTotalPrice = baseWashPrice !== null ? (baseWashPrice + (isBike && hasChainLube ? dynamicLubePrice : 0)) : null;
+
+  useEffect(() => {
+    if (!userEditedPrice) {
+      setOfferPrice(calculatedTotalPrice !== null ? String(calculatedTotalPrice) : '');
+    }
+  }, [calculatedTotalPrice, userEditedPrice]);
 
   async function handleStartJob() {
     const cleanReg = (vehicle?.reg_number || regNumber).toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -288,6 +303,10 @@ export default function MobileScan() {
       return;
     }
 
+    const finalOfferPrice = (offerPrice !== '' && !isNaN(Number(offerPrice)))
+      ? Number(offerPrice)
+      : (calculatedTotalPrice !== null ? calculatedTotalPrice : 0);
+
     setLoading(true);
     setError('');
     try {
@@ -301,6 +320,7 @@ export default function MobileScan() {
         before_photos: beforePhotos.filter(Boolean),
         has_chain_lube: isBike ? hasChainLube : false,
         chain_lube_price: dynamicLubePrice,
+        offer_price: finalOfferPrice,
         customer_type: customerType,
         workshop_id: (customerType === 'workshop' && workshopId) ? parseInt(workshopId) : null,
         payment_status: paymentStatus
@@ -353,16 +373,8 @@ export default function MobileScan() {
       {/* Mobile Top Header Navigation */}
       <div className="mobile-header">
         <div>
-          <h2 className="mobile-title">🚿 Perfecto Wash</h2>
-          <span className="mobile-subtitle">Washer Mobile Portal</span>
-        </div>
-        <div className="mobile-header-actions">
-          <Link to="/mobile/jobs" className="mobile-nav-btn active-queue-btn">
-            📋 Jobs
-          </Link>
-          <Link to="/mobile/bills" className="mobile-nav-btn">
-            🧾 Bills
-          </Link>
+          <h2 className="mobile-title">Vehicle scan</h2>
+          <span className="mobile-subtitle">Create a new wash job</span>
         </div>
       </div>
 
@@ -805,19 +817,20 @@ export default function MobileScan() {
 
             {isBike && (
               <div
-                className="mobile-lube-box mb-12"
+                className={`mobile-lube-box mb-12 ${hasChainLube ? 'selected' : ''}`}
                 onClick={() => setHasChainLube(!hasChainLube)}
               >
                 <div>
-                  <strong>⚙️ Add Chain Lube (+₹{dynamicLubePrice})</strong>
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>Chain lube application for bike</div>
+                  <strong style={{ color: hasChainLube ? '#581c87' : '#1e293b' }}>
+                    ⚙️ Add Chain Lube (+₹{dynamicLubePrice})
+                  </strong>
+                  <div style={{ fontSize: 12, color: hasChainLube ? '#7e22ce' : '#64748b' }}>
+                    Chain lube application for bike
+                  </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={hasChainLube}
-                  onChange={e => setHasChainLube(e.target.checked)}
-                  style={{ width: 22, height: 22 }}
-                />
+                <div className={`lube-checkbox-icon ${hasChainLube ? 'active' : ''}`}>
+                  {hasChainLube && '✓'}
+                </div>
               </div>
             )}
 
@@ -842,13 +855,59 @@ export default function MobileScan() {
               </div>
             </div>
 
-            {/* Total Price display */}
-            {totalPrice !== null && (
-              <div className="mobile-total-box">
-                <span>Total Amount:</span>
-                <span className="mobile-total-price">₹{totalPrice}</span>
+            {/* Editable Total Amount / Offer Price Field */}
+            <div className="mobile-total-box" style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#f8fafc', padding: 14, borderRadius: 12, border: '1.5px solid #cbd5e1' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="mobile-label" style={{ margin: 0, fontSize: 13, color: '#334155', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>💰 Total Amount (Offer Price)</span>
+                </label>
+                {userEditedPrice && calculatedTotalPrice !== null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOfferPrice(calculatedTotalPrice !== null ? String(calculatedTotalPrice) : '');
+                      setUserEditedPrice(false);
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: 12, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Reset to ₹{calculatedTotalPrice}
+                  </button>
+                )}
               </div>
-            )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 22, fontWeight: 800, color: '#0f766e' }}>₹</span>
+                <input
+                  type="number"
+                  className="mobile-input"
+                  placeholder={calculatedTotalPrice !== null ? String(calculatedTotalPrice) : 'Enter amount'}
+                  value={offerPrice}
+                  onChange={e => {
+                    setOfferPrice(e.target.value);
+                    setUserEditedPrice(true);
+                  }}
+                  style={{
+                    fontSize: 20,
+                    fontWeight: 800,
+                    color: '#0f766e',
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    border: '2px solid #0d9488',
+                    background: '#ffffff',
+                    width: '100%'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b' }}>
+                <span>Standard Rate: ₹{calculatedTotalPrice ?? '--'}</span>
+                {userEditedPrice && offerPrice !== '' && calculatedTotalPrice !== null && Number(offerPrice) !== calculatedTotalPrice && (
+                  <span style={{ color: Number(offerPrice) < calculatedTotalPrice ? '#059669' : '#d97706', fontWeight: 600 }}>
+                    {Number(offerPrice) < calculatedTotalPrice
+                      ? `Discounted (₹${calculatedTotalPrice - Number(offerPrice)} off)`
+                      : `Custom Rate (+₹${Number(offerPrice) - calculatedTotalPrice})`}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -859,11 +918,11 @@ export default function MobileScan() {
 
       {/* Floating Sticky Bottom Bar for Instant Wash Start */}
       {vehicle && (
-        <div className="mobile-sticky-bottom-bar">
+        <div className="mobile-sticky-bottom-bar has-mobile-nav">
           <div className="mobile-sticky-price">
             <span className="mobile-sticky-label">Total Amount</span>
             <span className="mobile-sticky-amount">
-              {totalPrice !== null ? `₹${totalPrice}` : '--'}
+              ₹{offerPrice !== '' ? offerPrice : (calculatedTotalPrice !== null ? calculatedTotalPrice : '--')}
             </span>
           </div>
           <button
@@ -876,6 +935,7 @@ export default function MobileScan() {
           </button>
         </div>
       )}
+      <MobileBottomNav />
     </div>
   );
 }

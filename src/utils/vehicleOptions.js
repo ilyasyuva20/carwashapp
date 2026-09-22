@@ -65,8 +65,8 @@ export const VEHICLE_BRANDS = {
 
 export const BRAND_MODELS = {
   // Maruti Suzuki
-  'Maruti Suzuki': ['Swift', 'WagonR', 'Baleno', 'Brezza', 'Dzire', 'Ertiga', 'Alto', 'Celerio', 'Grand Vitara', 'Jimny', 'Ignis', 'XL6', 'Fronx', 'Invicto', 'S-Presso', 'Ritz', 'Omni', 'Eeco'],
-  'Maruti': ['Swift', 'WagonR', 'Baleno', 'Brezza', 'Dzire', 'Ertiga', 'Alto', 'Celerio', 'Grand Vitara', 'Jimny', 'Ignis', 'XL6', 'Fronx', 'Invicto', 'S-Presso', 'Ritz', 'Omni', 'Eeco'],
+  'Maruti Suzuki': ['Swift', 'Swift Dzire Tour', 'WagonR', 'Baleno', 'Brezza', 'Dzire', 'Ertiga', 'Alto', 'Celerio', 'Grand Vitara', 'Jimny', 'Ignis', 'XL6', 'Fronx', 'Invicto', 'S-Presso', 'Ritz', 'Omni', 'Eeco'],
+  'Maruti': ['Swift', 'Swift Dzire Tour', 'WagonR', 'Baleno', 'Brezza', 'Dzire', 'Ertiga', 'Alto', 'Celerio', 'Grand Vitara', 'Jimny', 'Ignis', 'XL6', 'Fronx', 'Invicto', 'S-Presso', 'Ritz', 'Omni', 'Eeco'],
 
   // Hyundai
   'Hyundai': ['Creta', 'Venue', 'i20', 'Verna', 'Grand i10 Nios', 'Exter', 'Alcazar', 'Tucson', 'Aura', 'Santro', 'Eon', 'Kona EV', 'Ioniq 5'],
@@ -155,28 +155,10 @@ export const BRAND_MODELS = {
 
 export const COMMON_VEHICLE_COLORS = [
   'White',
-  'Pearl White',
   'Black',
-  'Midnight Black',
-  'Silver',
-  'Grey',
-  'Dark Grey',
-  'Cherry Red',
-  'Red',
-  'Maroon',
   'Blue',
-  'Navy Blue',
-  'Sky Blue',
-  'Green',
-  'EV Green',
-  'Olive Green',
-  'Yellow',
-  'Orange',
-  'Gold',
-  'Bronze',
-  'Brown',
-  'Beige',
-  'Dual Tone'
+  'Red',
+  'Green'
 ];
 
 /**
@@ -207,6 +189,8 @@ export function getModelsForBrand(brand) {
 export function normalizeValue(val, optionsList = []) {
   if (!val) return '';
   const clean = val.trim().toLowerCase();
-  const match = optionsList.find(opt => opt.toLowerCase() === clean || clean.includes(opt.toLowerCase()) || opt.toLowerCase().includes(clean));
+  const exactMatch = optionsList.find(opt => opt.toLowerCase() === clean);
+  if (exactMatch) return exactMatch;
+  const match = optionsList.find(opt => clean.includes(opt.toLowerCase()) || opt.toLowerCase().includes(clean));
   return match || val;
 }
