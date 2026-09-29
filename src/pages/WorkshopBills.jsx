@@ -15,6 +15,7 @@ export default function WorkshopBills() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedWorkshop, setSelectedWorkshop] = useState(null); // for settlement modal
   const [loading, setLoading] = useState(false);
+  const [settlingId, setSettlingId] = useState(null);
 
   // Handle Preset Date Switches
   function handlePresetChange(preset) {
@@ -65,11 +66,14 @@ export default function WorkshopBills() {
 
   // Quick single job settlement
   async function settleSingleJob(jobId, method) {
+    setSettlingId(jobId);
     try {
       await api.post('/bills/settle-job', { job_id: jobId, payment_method: method });
-      loadData();
+      await loadData();
     } catch (e) {
       alert(e.message || 'Failed to settle job');
+    } finally {
+      setSettlingId(null);
     }
   }
 
@@ -78,6 +82,38 @@ export default function WorkshopBills() {
 
   return (
     <div style={{ paddingBottom: 40 }}>
+      {/* 🌀 Signature Full-Page Blur Loader Backdrop for Tab Switches & Loading */}
+      {loading && (
+        <div className="fullpage-loader-backdrop">
+          <div className="loader-card">
+            <div className="spinner-outer-ring">
+              <span className="spinner-center-icon">🏭</span>
+            </div>
+            <h3 className="loader-title">Loading Workshop Data...</h3>
+            <p className="loader-subtitle">Fetching latest workshop billing status...</p>
+            <div className="loader-progress-bar">
+              <div className="loader-progress-fill" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🌀 Payment Processing Loader */}
+      {settlingId && (
+        <div className="fullpage-loader-backdrop">
+          <div className="loader-card">
+            <div className="spinner-outer-ring">
+              <span className="spinner-center-icon">💳</span>
+            </div>
+            <h3 className="loader-title">Processing Settlement...</h3>
+            <p className="loader-subtitle">Updating workshop bill payment status...</p>
+            <div className="loader-progress-bar">
+              <div className="loader-progress-fill" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="page-header flex between center" style={{ marginBottom: 20 }}>
         <div>

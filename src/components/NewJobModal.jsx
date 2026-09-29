@@ -48,36 +48,56 @@ const REGEX_PLATE = /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$|^[0-9]{2}BH[0-9]{4}[
   async function lookup() {
     const cleanReg = regNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!cleanReg) {
-      setError('Please enter a registration number');
-      return;
-    }
-    if (!REGEX_PLATE.test(cleanReg)) {
-      setError('Invalid Registration Number format (e.g. KL32L2011 or 22BH1234A)');
+      const tempReg = `NEW-${Math.floor(1000 + Math.random() * 9000)}`;
+      setRegNumber(tempReg);
+      setVehicle({
+        id: null,
+        reg_number: tempReg,
+        segment: 'hatchback',
+        brand: '',
+        model: '',
+        color: '',
+        source: 'manual'
+      });
+      setError('');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const v = await api.get(`/vehicles/lookup/${cleanReg}`);
-      if (v.not_found) {
-        setVehicle(null);
-        setError('Vehicle details were not returned. Please retry after the vehicle lookup service is updated.');
-        return;
+      if (REGEX_PLATE.test(cleanReg)) {
+        const v = await api.get(`/vehicles/lookup/${cleanReg}`);
+        if (v && !v.not_found && v.brand && v.model) {
+          setVehicle(v);
+          setRegNumber(cleanReg);
+          if (v.phone) setPhone(v.phone);
+          else setPhone('');
+          if (v.customer_name) setCustomerName(v.customer_name);
+          else setCustomerName('');
+          return;
+        }
       }
-      setVehicle(v);
+      setVehicle({
+        id: null,
+        reg_number: cleanReg,
+        segment: 'hatchback',
+        brand: '',
+        model: '',
+        color: '',
+        source: 'manual'
+      });
       setRegNumber(cleanReg);
-      if (v.phone) {
-        setPhone(v.phone);
-      } else {
-        setPhone('');
-      }
-      if (v.customer_name) {
-        setCustomerName(v.customer_name);
-      } else {
-        setCustomerName('');
-      }
     } catch (e) {
-      setError(e.message);
+      setVehicle({
+        id: null,
+        reg_number: cleanReg,
+        segment: 'hatchback',
+        brand: '',
+        model: '',
+        color: '',
+        source: 'manual'
+      });
+      setRegNumber(cleanReg);
     } finally {
       setLoading(false);
     }
@@ -210,13 +230,9 @@ function getImageUrl(url) {
     : (chainLubeType?.pricing?.bike ?? 150);
 
   async function createJob() {
-    const cleanReg = (vehicle?.reg_number || regNumber).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const cleanReg = (vehicle?.reg_number || regNumber || '').toUpperCase().replace(/[^A-Z0-9-]/g, '');
     if (!cleanReg) {
       setError('Registration number is required');
-      return;
-    }
-    if (!REGEX_PLATE.test(cleanReg)) {
-      setError('Invalid Registration Number format (e.g. KL32L2011 or 22BH1234A)');
       return;
     }
     if (!vehicle?.brand || !vehicle.brand.trim()) {
@@ -240,8 +256,8 @@ function getImageUrl(url) {
       return;
     }
     const cleanPhone = (phone || '').replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length !== 10) {
-      setError('Mobile phone number is required and must be exactly 10 digits');
+    if (cleanPhone && cleanPhone.length !== 10) {
+      setError('Mobile phone number must be exactly 10 digits');
       return;
     }
     if (isCar && !selectedWashId) {
@@ -780,7 +796,7 @@ return (
               </div>
               <div>
                 <label style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block', color: 'var(--muted)' }}>
-                  Mobile Phone <span style={{ color: '#ef4444' }}>* (10 digits)</span>
+                  Mobile Phone <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(Optional)</span>
                 </label>
                 <input
                   type="tel"

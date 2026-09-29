@@ -79,6 +79,9 @@ export default function MobileScan() {
 
   const [loading, setLoading] = useState(false);
   const [ocrScanning, setOcrScanning] = useState(false);
+  const [showOcrConfirmModal, setShowOcrConfirmModal] = useState(false);
+  const [ocrPreviewImage, setOcrPreviewImage] = useState('');
+  const [ocrCandidateNumber, setOcrCandidateNumber] = useState('');
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -109,14 +112,16 @@ export default function MobileScan() {
     setSuccessMsg('');
 
     try {
+      const compressedPreview = await compressImage(file, 1200, 1200, 0.85);
       const extractedPlate = await recognizePlateNumber(file);
-      if (extractedPlate) {
-        setRegNumber(extractedPlate.toUpperCase());
-        setSuccessMsg(`Extracted plate: ${extractedPlate.toUpperCase()}`);
-        // Auto-trigger lookup
-        await lookupVehicle(extractedPlate.toUpperCase());
-      } else {
-        setError('No text recognized. Please enter registration number manually.');
+
+      const candidate = extractedPlate ? extractedPlate.toUpperCase() : '';
+      setOcrPreviewImage(compressedPreview);
+      setOcrCandidateNumber(candidate);
+      setShowOcrConfirmModal(true);
+
+      if (!candidate) {
+        setError('No registration number detected automatically. Please verify or type the plate number from the photo below.');
       }
     } catch (err) {
       setError(err.message || 'OCR failed. Please enter number manually.');
@@ -131,31 +136,66 @@ export default function MobileScan() {
 
   async function lookupVehicle(plateToLookup = regNumber) {
     const target = plateToLookup.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    // 1. If clicking Fetch without entering a number plate (New / Unregistered vehicle)
     if (!target) {
-      setError('Please enter a registration number');
+      const tempPlate = `NEW-${Math.floor(1000 + Math.random() * 9000)}`;
+      setRegNumber(tempPlate);
+      setVehicle({
+        id: null,
+        reg_number: tempPlate,
+        segment: 'hatchback',
+        brand: '',
+        model: '',
+        color: '',
+        source: 'manual'
+      });
+      setError('');
+      setSuccessMsg('ℹ️ Unregistered / New Vehicle manual entry mode. Please fill in details below.');
       return;
     }
-    if (!REGEX_PLATE.test(target)) {
-      setError('Invalid Registration Number format (e.g. KL32L2011 or 22BH1234A)');
-      return;
-    }
+
     setLoading(true);
     setError('');
     try {
-      const v = await api.get(`/vehicles/lookup/${target}`);
-      if (v.not_found) {
-        setVehicle(null);
-        setError('Vehicle details were not returned. Please retry after the vehicle lookup service is updated.');
-        return;
+      if (REGEX_PLATE.test(target)) {
+        const v = await api.get(`/vehicles/lookup/${target}`);
+        if (v && !v.not_found && v.brand && v.model) {
+          setVehicle(v);
+          setRegNumber(target);
+          if (v.phone) setPhone(v.phone);
+          else setPhone('');
+          if (v.customer_name) setCustomerName(v.customer_name);
+          else setCustomerName('');
+          return;
+        }
       }
-      setVehicle(v);
+      
+      // If not standard plate or details not returned by RTO, open manual entry form immediately
+      setVehicle({
+        id: null,
+        reg_number: target,
+        segment: 'hatchback',
+        brand: '',
+        model: '',
+        color: '',
+        source: 'manual'
+      });
       setRegNumber(target);
-      if (v.phone) setPhone(v.phone);
-      else setPhone('');
-      if (v.customer_name) setCustomerName(v.customer_name);
-      else setCustomerName('');
+      setSuccessMsg('ℹ️ Vehicle details not found in RTO. Please enter details manually below.');
     } catch (e) {
-      setError(e.message || 'Lookup failed');
+      setVehicle({
+        id: null,
+        reg_number: target,
+        segment: 'hatchback',
+        brand: '',
+        model: '',
+        color: '',
+        source: 'manual'
+      });
+      setRegNumber(target);
+      setError('');
+      setSuccessMsg('ℹ️ Please enter vehicle details manually below.');
     } finally {
       setLoading(false);
     }
@@ -264,13 +304,9 @@ export default function MobileScan() {
   }, [calculatedTotalPrice, userEditedPrice]);
 
   async function handleStartJob() {
-    const cleanReg = (vehicle?.reg_number || regNumber).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const cleanReg = (vehicle?.reg_number || regNumber || '').toUpperCase().replace(/[^A-Z0-9-]/g, '');
     if (!cleanReg) {
       setError('Registration number is required');
-      return;
-    }
-    if (!REGEX_PLATE.test(cleanReg)) {
-      setError('Invalid Registration Number format (e.g. KL32L2011 or 22BH1234A)');
       return;
     }
     if (!vehicle?.brand || !vehicle.brand.trim()) {
@@ -294,8 +330,8 @@ export default function MobileScan() {
       return;
     }
     const cleanPhone = (phone || '').replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length !== 10) {
-      setError('Mobile phone number is required and must be exactly 10 digits');
+    if (cleanPhone && cleanPhone.length !== 10) {
+      setError('Mobile phone number must be exactly 10 digits');
       return;
     }
     if (isCar && !selectedWashId) {
@@ -370,6 +406,109 @@ export default function MobileScan() {
         </div>
       )}
 
+      {/* 📸 OCR Registration Number Verification Modal */}
+      {showOcrConfirmModal && (
+        <div className="modal-backdrop" onClick={() => setShowOcrConfirmModal(false)}>
+          <div
+            className="mobile-card"
+            style={{
+              width: '100%',
+              maxWidth: 460,
+              background: '#ffffff',
+              borderRadius: 20,
+              padding: '20px 20px 24px',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>🔍</span> Confirm Registration Number
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowOcrConfirmModal(false)}
+                style={{ background: '#f1f5f9', border: 'none', width: 32, height: 32, borderRadius: '50%', fontSize: 16, color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: 13, color: '#475569', marginTop: 0, marginBottom: 14, lineHeight: 1.4 }}>
+              Verify if the detected registration number matches the photo below before fetching vehicle details.
+            </p>
+
+            {/* Photo Preview */}
+            {ocrPreviewImage && (
+              <div style={{ marginBottom: 16, borderRadius: 14, overflow: 'hidden', border: '2px solid #0284c7', background: '#0f172a', position: 'relative' }}>
+                <div style={{ position: 'absolute', top: 8, left: 8, background: 'rgba(2, 132, 199, 0.95)', color: '#ffffff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 6, backdropFilter: 'blur(4px)' }}>
+                  📷 Captured Photo
+                </div>
+                <img
+                  src={ocrPreviewImage}
+                  alt="Scanned License Plate"
+                  style={{ width: '100%', maxHeight: 220, objectFit: 'contain', display: 'block', background: '#090d16' }}
+                />
+              </div>
+            )}
+
+            {/* Editable Registration Number */}
+            <div style={{ marginBottom: 18 }}>
+              <label className="mobile-label" style={{ color: '#0284c7', fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 6 }}>
+                Extracted Number Plate
+              </label>
+              <input
+                type="text"
+                className="mobile-input reg-input"
+                style={{ fontSize: 22, textAlign: 'center', padding: '12px', border: '2px solid #0284c7', background: '#f0f9ff', fontWeight: 800, letterSpacing: '0.1em' }}
+                value={ocrCandidateNumber}
+                autoCapitalize="characters"
+                autoComplete="off"
+                autoCorrect="off"
+                onChange={e => setOcrCandidateNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                placeholder="e.g. KL07CD1234"
+              />
+              <span style={{ fontSize: 11.5, color: '#64748b', display: 'block', marginTop: 6, textAlign: 'center', fontWeight: 500 }}>
+                ✏️ Edit if any character was misread by OCR
+              </span>
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <button
+                type="button"
+                className="mobile-btn mobile-btn-secondary"
+                onClick={() => setShowOcrConfirmModal(false)}
+                style={{ padding: '12px', fontSize: 14, border: '1.5px solid #cbd5e1' }}
+              >
+                Cancel / Retake
+              </button>
+              <button
+                type="button"
+                className="mobile-btn mobile-btn-submit"
+                disabled={!ocrCandidateNumber.trim()}
+                onClick={async () => {
+                  const target = ocrCandidateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                  if (!target) {
+                    setError('Please enter a valid registration number');
+                    return;
+                  }
+                  setShowOcrConfirmModal(false);
+                  setRegNumber(target);
+                  setSuccessMsg(`Confirmed plate: ${target}`);
+                  await lookupVehicle(target);
+                }}
+                style={{ padding: '12px', fontSize: 14, background: 'linear-gradient(135deg, #0284c7, #0369a1)', color: '#ffffff' }}
+              >
+                ✓ Fetch Vehicle Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Top Header Navigation */}
       <div className="mobile-header">
         <div>
@@ -427,7 +566,7 @@ export default function MobileScan() {
           <div className="mobile-input-group mt-12">
             <input
               type="text"
-              placeholder="e.g. KL07CD1234"
+              placeholder="e.g. KL07CD1234 (Leave blank for New Vehicle)"
               value={regNumber}
               autoCapitalize="characters"
               autoComplete="off"
@@ -440,9 +579,28 @@ export default function MobileScan() {
               type="button"
               className="mobile-btn mobile-btn-secondary"
               onClick={() => lookupVehicle()}
-              disabled={loading || !regNumber.trim()}
+              disabled={loading}
+              title="Click to fetch details or start manual entry"
             >
               {loading ? '...' : 'Fetch'}
+            </button>
+          </div>
+
+          <div style={{ marginTop: 10, textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={() => lookupVehicle('')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#0284c7',
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: 'pointer',
+                textDecoration: 'underline'
+              }}
+            >
+              ✏️ No number plate / New Vehicle? Click to enter details manually
             </button>
           </div>
 
@@ -689,7 +847,7 @@ export default function MobileScan() {
                 />
               </div>
               <div>
-                <label className="mobile-sublabel">Mobile Phone <span style={{ color: '#ef4444' }}>* (10 digits)</span></label>
+                <label className="mobile-sublabel">Mobile Phone <span style={{ fontWeight: 400, color: '#64748b' }}>(Optional)</span></label>
                 <input
                   type="tel"
                   className="mobile-input-sm"

@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 
+function getTodayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export default function Bills() {
   const [data, setData] = useState({
     summary: { total_cars: 0, total_bikes: 0, total_vehicles: 0, total_amount: 0, unpaid_amount: 0, paid_amount: 0 },
@@ -9,17 +17,38 @@ export default function Bills() {
   const [segmentFilter, setSegmentFilter] = useState('all'); // all, car, bike
   const [paymentFilter, setPaymentFilter] = useState('all'); // all, unpaid, paid
   const [datePreset, setDatePreset] = useState('today'); // today, week, month, all, custom
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
-  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(getTodayStr());
+  const [endDate, setEndDate] = useState(getTodayStr());
   const [searchQuery, setSearchQuery] = useState('');
   const [showNew, setShowNew] = useState(false);
   const [selectedReceiptJob, setSelectedReceiptJob] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [settlingId, setSettlingId] = useState(null);
+  const [editingJobId, setEditingJobId] = useState(null);
+  const [editingAmount, setEditingAmount] = useState('');
+  const [savingPrice, setSavingPrice] = useState(false);
+
+  async function handleSaveAdjustedAmount(jobId) {
+    if (editingAmount === '' || isNaN(Number(editingAmount)) || Number(editingAmount) < 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+    setSavingPrice(true);
+    try {
+      await api.post('/bills/adjust-amount', { job_id: jobId, new_amount: editingAmount });
+      setEditingJobId(null);
+      loadData();
+    } catch (e) {
+      alert(e.message || 'Failed to update bill amount');
+    } finally {
+      setSavingPrice(false);
+    }
+  }
 
   // Handle Preset Date Switches
   function handlePresetChange(preset) {
     setDatePreset(preset);
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayStr();
     if (preset === 'today') {
       setStartDate(todayStr);
       setEndDate(todayStr);
@@ -67,11 +96,14 @@ export default function Bills() {
 
   // Quick single job settlement
   async function settleJob(jobId, method) {
+    setSettlingId(jobId);
     try {
       await api.post('/bills/settle-job', { job_id: jobId, payment_method: method });
-      loadData();
+      await loadData();
     } catch (e) {
       alert(e.message || 'Failed to settle payment');
+    } finally {
+      setSettlingId(null);
     }
   }
 
@@ -80,6 +112,37 @@ export default function Bills() {
 
   return (
     <div style={{ paddingBottom: 40 }}>
+      {/* 🌀 Signature Full-Page Blur Loader Backdrop for Tab Switches & Loading */}
+      {loading && (
+        <div className="fullpage-loader-backdrop">
+          <div className="loader-card">
+            <div className="spinner-outer-ring">
+              <span className="spinner-center-icon">🧾</span>
+            </div>
+            <h3 className="loader-title">Loading Bills...</h3>
+            <p className="loader-subtitle">Fetching latest customer bills and payment records...</p>
+            <div className="loader-progress-bar">
+              <div className="loader-progress-fill" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🌀 Payment Processing Loader */}
+      {settlingId && (
+        <div className="fullpage-loader-backdrop">
+          <div className="loader-card">
+            <div className="spinner-outer-ring">
+              <span className="spinner-center-icon">💳</span>
+            </div>
+            <h3 className="loader-title">Processing Payment...</h3>
+            <p className="loader-subtitle">Settling bill and recording transaction...</p>
+            <div className="loader-progress-bar">
+              <div className="loader-progress-fill" />
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="page-header flex between center" style={{ marginBottom: 20 }}>
         <div>
@@ -233,17 +296,27 @@ export default function Bills() {
         {/* Row 2: Status Tabs & Search Box */}
         <div className="flex between center" style={{ flexWrap: 'wrap', gap: 12 }}>
           {/* Status Tabs */}
-          <div className="status-tab-group" style={{ display: 'inline-flex', gap: 4 }}>
+          <div className="status-tab-group" style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
             {[
               { id: 'all', label: 'All Bills' },
-              { id: 'unpaid', label: '⏳ Unpaid' },
+              { id: 'unpaid', label: datePreset === 'today' ? '⏳ Today Unpaid' : '⏳ Unpaid' },
+              {
+                id: 'other_pending',
+                label: `⚠️ Other Pending${summary.other_pending_count != null ? ` (${summary.other_pending_count})` : ''}`
+              },
               { id: 'paid', label: '✅ Paid' }
             ].map(tab => (
               <button
                 key={tab.id}
                 className={`status-tab ${paymentFilter === tab.id ? 'active' : ''}`}
                 onClick={() => setPaymentFilter(tab.id)}
-                style={{ padding: '6px 16px', fontSize: 13 }}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: 13,
+                  background: paymentFilter === tab.id && tab.id === 'other_pending' ? '#fff7ed' : undefined,
+                  color: paymentFilter === tab.id && tab.id === 'other_pending' ? '#c2410c' : undefined,
+                  borderColor: paymentFilter === tab.id && tab.id === 'other_pending' ? '#fdba74' : undefined
+                }}
               >
                 {tab.label}
               </button>
@@ -280,10 +353,16 @@ export default function Bills() {
           <p className="muted" style={{ padding: 30, textAlign: 'center', margin: 0 }}>Loading retail bills...</p>
         ) : jobsList.length === 0 ? (
           <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>🧾</div>
-            <p style={{ margin: 0, fontWeight: 600, color: '#1e293b', fontSize: 15 }}>No completed customer bills found</p>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>
+              {paymentFilter === 'other_pending' ? '🎉' : '🧾'}
+            </div>
+            <p style={{ margin: 0, fontWeight: 600, color: '#1e293b', fontSize: 15 }}>
+              {paymentFilter === 'other_pending' ? 'No pending bills from previous days' : 'No completed customer bills found'}
+            </p>
             <p className="muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
-              Completed jobs for retail customers will appear here automatically.
+              {paymentFilter === 'other_pending'
+                ? 'All previous customer bills are cleared and settled!'
+                : 'Completed jobs for retail customers will appear here automatically.'}
             </p>
           </div>
         ) : (
@@ -366,9 +445,72 @@ export default function Bills() {
 
                     {/* TOTAL BILL */}
                     <td style={{ padding: '12px 14px', textAlign: 'right' }}>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
-                        ₹{job.price}
-                      </div>
+                      {!isPaid && editingJobId === job.id ? (
+                        <div className="flex center gap-4" style={{ justifyContent: 'flex-end' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>₹</span>
+                          <input
+                            type="number"
+                            value={editingAmount}
+                            onChange={e => setEditingAmount(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleSaveAdjustedAmount(job.id);
+                              if (e.key === 'Escape') setEditingJobId(null);
+                            }}
+                            autoFocus
+                            style={{
+                              width: 75,
+                              padding: '2px 6px',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              borderRadius: 6,
+                              border: '1px solid #0d9488',
+                              textAlign: 'right'
+                            }}
+                          />
+                          <button
+                            onClick={() => handleSaveAdjustedAmount(job.id)}
+                            disabled={savingPrice}
+                            style={{ background: '#0d9488', color: '#fff', border: 'none', borderRadius: 4, padding: '3px 8px', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}
+                            title="Save Amount"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={() => setEditingJobId(null)}
+                            style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: 4, padding: '3px 6px', fontSize: 12, cursor: 'pointer' }}
+                            title="Cancel"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
+                            ₹{job.price}
+                          </span>
+                          {!isPaid && (
+                            <button
+                              onClick={() => {
+                                setEditingJobId(job.id);
+                                setEditingAmount(job.price);
+                              }}
+                              style={{
+                                background: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: 6,
+                                padding: '2px 6px',
+                                fontSize: 11,
+                                cursor: 'pointer',
+                                color: '#0f766e',
+                                fontWeight: 600
+                              }}
+                              title="Edit/Adjust Bill Amount"
+                            >
+                              ✏️ Edit
+                            </button>
+                          )}
+                        </div>
+                      )}
                       {job.bill?.discount_amount > 0 && (
                         <div style={{ fontSize: 10.5, color: '#059669', fontWeight: 600 }}>
                           Reward Disc: -₹{job.bill.discount_amount}

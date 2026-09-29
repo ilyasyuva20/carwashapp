@@ -307,9 +307,11 @@ function OpeningBalanceModal({ date, initialCash, initialGpay, onClose, onDone }
   const [cash, setCash] = useState(initialCash);
   const [gpay, setGpay] = useState(initialGpay);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   async function save() {
     setLoading(true);
+    setError('');
     try {
       await api.post('/reports/opening-balance', {
         date,
@@ -317,6 +319,8 @@ function OpeningBalanceModal({ date, initialCash, initialGpay, onClose, onDone }
         opening_gpay: Number(gpay) || 0
       });
       onDone();
+    } catch (err) {
+      setError(err.message || 'Failed to save opening balance');
     } finally {
       setLoading(false);
     }
@@ -329,6 +333,8 @@ function OpeningBalanceModal({ date, initialCash, initialGpay, onClose, onDone }
           <h2 style={{ margin: 0, fontSize: 18 }}>Set Opening Balance ({date})</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--muted)' }}>✕</button>
         </div>
+
+        {error && <div style={{ color: '#e11d48', fontSize: 13, marginBottom: 12, background: '#fff1f2', padding: 8, borderRadius: 6 }}>❌ {error}</div>}
 
         <div className="field">
           <label>Opening Cash (₹)</label>

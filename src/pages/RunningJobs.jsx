@@ -299,10 +299,17 @@ export default function RunningJobs() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: 6
+                        gap: 8
                       }}
                     >
-                      {completingId === job.id ? 'Saving...' : 'Complete wash'}
+                      {completingId === job.id ? (
+                        <>
+                          <span className="btn-spinner-sm" />
+                          <span>Completing...</span>
+                        </>
+                      ) : (
+                        'Complete wash'
+                      )}
                     </button>
 
                     <button
@@ -324,6 +331,22 @@ export default function RunningJobs() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 🌀 Site Signature Full-Page Blur Loader Backdrop */}
+      {completingId && (
+        <div className="fullpage-loader-backdrop">
+          <div className="loader-card">
+            <div className="spinner-outer-ring">
+              <span className="spinner-center-icon">🧼</span>
+            </div>
+            <h3 className="loader-title">Completing Wash...</h3>
+            <p className="loader-subtitle">Updating service status & generating customer bill receipt...</p>
+            <div className="loader-progress-bar">
+              <div className="loader-progress-fill" />
+            </div>
+          </div>
         </div>
       )}
 

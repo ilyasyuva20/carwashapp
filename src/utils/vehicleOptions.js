@@ -189,6 +189,7 @@ export function getModelsForBrand(brand) {
 export function normalizeValue(val, optionsList = []) {
   if (!val) return '';
   const clean = val.trim().toLowerCase();
+  if (clean === 'null' || clean === 'null null' || clean === 'undefined') return '';
   const exactMatch = optionsList.find(opt => opt.toLowerCase() === clean);
   if (exactMatch) return exactMatch;
   const match = optionsList.find(opt => clean.includes(opt.toLowerCase()) || opt.toLowerCase().includes(clean));

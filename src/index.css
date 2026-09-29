@@ -1468,6 +1468,17 @@ tbody tr:hover { background: #f8fafc; }
   100% { transform: rotate(360deg); }
 }
 
+.btn-spinner-sm {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  animation: spinRing 0.75s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
 .spinner-center-icon {
   position: absolute;
   font-size: 28px;

@@ -183,8 +183,16 @@ export default function MobileJobs() {
                       className="mobile-btn-complete"
                       disabled={completingId === job.id}
                       onClick={() => handleMarkComplete(job.id)}
+                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                     >
-                      {completingId === job.id ? 'Completing...' : '✓ Complete Wash'}
+                      {completingId === job.id ? (
+                        <>
+                          <span className="btn-spinner-sm" />
+                          <span>Completing...</span>
+                        </>
+                      ) : (
+                        '✓ Complete Wash'
+                      )}
                     </button>
                   </div>
                 </div>
@@ -193,6 +201,23 @@ export default function MobileJobs() {
           </div>
         )}
       </div>
+
+      {/* 🌀 Site Signature Full-Page Blur Loader Backdrop */}
+      {completingId && (
+        <div className="fullpage-loader-backdrop">
+          <div className="loader-card">
+            <div className="spinner-outer-ring">
+              <span className="spinner-center-icon">🧼</span>
+            </div>
+            <h3 className="loader-title">Completing Wash...</h3>
+            <p className="loader-subtitle">Updating service status & generating customer bill receipt...</p>
+            <div className="loader-progress-bar">
+              <div className="loader-progress-fill" />
+            </div>
+          </div>
+        </div>
+      )}
+
       <MobileBottomNav />
     </div>
   );

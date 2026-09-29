@@ -22,7 +22,7 @@ export default function MobileBills() {
     summary: { total_cars: 0, total_bikes: 0, total_vehicles: 0, total_amount: 0, unpaid_amount: 0, paid_amount: 0 },
     jobs: []
   });
-  const [paymentFilter] = useState('unpaid');
+  const [paymentFilter, setPaymentFilter] = useState('unpaid');
   const [segmentFilter, setSegmentFilter] = useState('all'); // all, car, bike
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -30,11 +30,31 @@ export default function MobileBills() {
   const [settlingId, setSettlingId] = useState(null);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [selectedReceiptJob, setSelectedReceiptJob] = useState(null);
+  const [editingJobId, setEditingJobId] = useState(null);
+  const [editingAmount, setEditingAmount] = useState('');
+  const [savingPrice, setSavingPrice] = useState(false);
+
+  async function handleSaveAdjustedAmount(jobId) {
+    if (editingAmount === '' || isNaN(Number(editingAmount)) || Number(editingAmount) < 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+    setSavingPrice(true);
+    try {
+      await api.post('/bills/adjust-amount', { job_id: jobId, new_amount: editingAmount });
+      setEditingJobId(null);
+      fetchBills();
+    } catch (e) {
+      alert(e.message || 'Failed to update bill amount');
+    } finally {
+      setSavingPrice(false);
+    }
+  }
 
   const fetchBills = useCallback(async () => {
     setLoading(true);
     try {
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = new Date().toLocaleDateString('en-CA');
       let params = `?date=${todayStr}&segment=${segmentFilter}&payment_status=${paymentFilter}`;
       if (searchQuery.trim()) {
         params += `&q=${encodeURIComponent(searchQuery.trim())}`;
@@ -158,6 +178,41 @@ export default function MobileBills() {
               + Bill
             </button>
           </div>
+          {/* Payment Status Tabs */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
+            <button
+              type="button"
+              onClick={() => setPaymentFilter('unpaid')}
+              style={{
+                padding: '7px 6px',
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                border: paymentFilter === 'unpaid' ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                background: paymentFilter === 'unpaid' ? '#e0f2fe' : '#ffffff',
+                color: paymentFilter === 'unpaid' ? '#0369a1' : '#475569'
+              }}
+            >
+              ⏳ Today Unpaid
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentFilter('other_pending')}
+              style={{
+                padding: '7px 6px',
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                border: paymentFilter === 'other_pending' ? '1.5px solid #ea580c' : '1px solid #cbd5e1',
+                background: paymentFilter === 'other_pending' ? '#ffedd5' : '#ffffff',
+                color: paymentFilter === 'other_pending' ? '#c2410c' : '#475569'
+              }}
+            >
+              ⚠️ Other Pending {rawSummary.other_pending_count ? `(${rawSummary.other_pending_count})` : ''}
+            </button>
+          </div>
 
           {/* Filter Segment Tabs */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
@@ -187,7 +242,7 @@ export default function MobileBills() {
           </div>
 
           <div className="mobile-bills-filter-note">
-            Showing completed washes awaiting payment
+            {paymentFilter === 'other_pending' ? 'Showing unpaid washes completed before today' : 'Showing today completed washes awaiting payment'}
           </div>
         </div>
 
@@ -273,13 +328,94 @@ export default function MobileBills() {
 
                   {/* Total & Action Bar */}
                   <div style={{ background: '#f8fafc', padding: 10, borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
                         Total Bill Amount:
                       </span>
-                      <span style={{ fontSize: 22, fontWeight: 900, color: isPaid ? '#047857' : '#9f1239' }}>
-                        ₹{price}
-                      </span>
+                      {!isPaid && editingJobId === job.id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: 14, fontWeight: 800 }}>₹</span>
+                          <input
+                            type="number"
+                            value={editingAmount}
+                            onChange={e => setEditingAmount(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleSaveAdjustedAmount(job.id);
+                              if (e.key === 'Escape') setEditingJobId(null);
+                            }}
+                            autoFocus
+                            style={{
+                              width: 80,
+                              padding: '4px 6px',
+                              fontSize: 15,
+                              fontWeight: 800,
+                              borderRadius: 8,
+                              border: '1.5px solid #0284c7',
+                              textAlign: 'right'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveAdjustedAmount(job.id)}
+                            disabled={savingPrice}
+                            style={{
+                              background: '#0284c7',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: 6,
+                              padding: '5px 8px',
+                              fontSize: 12,
+                              fontWeight: 800,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ✓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingJobId(null)}
+                            style={{
+                              background: '#f1f5f9',
+                              color: '#64748b',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: 6,
+                              padding: '5px 8px',
+                              fontSize: 12,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 22, fontWeight: 900, color: isPaid ? '#047857' : '#9f1239' }}>
+                            ₹{price}
+                          </span>
+                          {!isPaid && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingJobId(job.id);
+                                setEditingAmount(price);
+                              }}
+                              style={{
+                                background: '#ffffff',
+                                border: '1px solid #cbd5e1',
+                                color: '#0f766e',
+                                padding: '3px 8px',
+                                borderRadius: 6,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                              title="Edit/Adjust Amount"
+                            >
+                              ✏️ Edit
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Pay Options for Unpaid Jobs */}
@@ -389,6 +525,38 @@ export default function MobileBills() {
           onClose={() => setSelectedReceiptJob(null)}
         />
       )}
+      {/* 🌀 Signature Full-Page Blur Loader Backdrop for Tab Switches & Loading */}
+      {loading && (
+        <div className="fullpage-loader-backdrop">
+          <div className="loader-card">
+            <div className="spinner-outer-ring">
+              <span className="spinner-center-icon">🧾</span>
+            </div>
+            <h3 className="loader-title">Loading Bills...</h3>
+            <p className="loader-subtitle">Fetching latest customer bills and payment records...</p>
+            <div className="loader-progress-bar">
+              <div className="loader-progress-fill" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🌀 Payment Processing Loader */}
+      {settlingId && (
+        <div className="fullpage-loader-backdrop">
+          <div className="loader-card">
+            <div className="spinner-outer-ring">
+              <span className="spinner-center-icon">💵</span>
+            </div>
+            <h3 className="loader-title">Processing Payment...</h3>
+            <p className="loader-subtitle">Settling bill and recording transaction...</p>
+            <div className="loader-progress-bar">
+              <div className="loader-progress-fill" />
+            </div>
+          </div>
+        </div>
+      )}
+
       <MobileBottomNav />
     </div>
   );
