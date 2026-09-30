@@ -731,7 +731,16 @@ function GenerateBillModal({ onClose, onDone }) {
   );
 }
 
-async function sendWhatsAppReceipt(job) {
+function getPdfUrl(jobId) {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) {
+    const cleanBase = envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+    return `${cleanBase}/bills/pdf/${jobId}`;
+  }
+  return `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}/api/bills/pdf/${jobId}`;
+}
+
+async function shareOnWhatsapp(job) {
   let rawPhone = job.vehicle?.phone || '';
   if (!rawPhone) {
     rawPhone = prompt('Enter customer WhatsApp number:');
@@ -742,7 +751,7 @@ async function sendWhatsAppReceipt(job) {
     cleanPhone = '91' + cleanPhone;
   }
 
-  const pdfUrl = `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':4000' : ''}/api/bills/pdf/${job.id}`;
+  const pdfUrl = getPdfUrl(job.id);
   const fileName = `Receipt_${job.vehicle?.reg_number || job.id}.pdf`;
 
   // Native File Share API (Mobile/Web Share supported browsers)
@@ -780,7 +789,7 @@ async function sendWhatsAppReceipt(job) {
 }
 
 function downloadPdfReceipt(job) {
-  const pdfUrl = `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':4000' : ''}/api/bills/pdf/${job.id}`;
+  const pdfUrl = getPdfUrl(job.id);
   window.open(pdfUrl, '_blank');
 }
 
