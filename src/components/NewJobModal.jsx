@@ -29,6 +29,78 @@ export default function NewJobModal({ onClose, onCreated }) {
   const [customModelMode, setCustomModelMode] = useState(false);
   const [customColorMode, setCustomColorMode] = useState(false);
 
+  // Returning Customer Search States
+  const [entryMode, setEntryMode] = useState('plate'); // 'plate' | 'customer'
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [customerSearchResults, setCustomerSearchResults] = useState([]);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [showVehicleSelectModal, setShowVehicleSelectModal] = useState(false);
+
+  async function searchReturningCustomer(query) {
+    setCustomerSearchQuery(query);
+    if (!query || query.trim().length < 2) {
+      setCustomerSearchResults([]);
+      return;
+    }
+    setSearchingCustomers(true);
+    try {
+      const results = await api.get(`/customers/search?q=${encodeURIComponent(query.trim())}`);
+      setCustomerSearchResults(Array.isArray(results) ? results : []);
+    } catch (err) {
+      console.error('Customer search error:', err);
+    } finally {
+      setSearchingCustomers(false);
+    }
+  }
+
+  function handleSelectCustomer(customer) {
+    setSelectedCustomer(customer);
+    setCustomerName(customer.name || '');
+    if (customer.phone) setPhone(customer.phone);
+
+    const vehicles = customer.vehicles || [];
+    if (vehicles.length === 1) {
+      selectCustomerVehicle(vehicles[0], customer);
+    } else if (vehicles.length > 1) {
+      setShowVehicleSelectModal(true);
+    } else {
+      const tempReg = `NEW-${Math.floor(1000 + Math.random() * 9000)}`;
+      setRegNumber(tempReg);
+      setVehicle({
+        id: null,
+        reg_number: tempReg,
+        segment: 'hatchback',
+        brand: '',
+        model: '',
+        color: '',
+        source: 'manual',
+        customer_id: customer.id
+      });
+    }
+  }
+
+  function selectCustomerVehicle(v, custObj = selectedCustomer) {
+    const targetReg = (v.reg_number || '').toUpperCase();
+    setRegNumber(targetReg);
+    setVehicle({
+      id: v.id || null,
+      reg_number: targetReg,
+      brand: v.brand || '',
+      model: v.model || '',
+      segment: v.segment || 'hatchback',
+      color: v.color || '',
+      year: v.year || '',
+      customer_id: v.customer_id || (custObj ? custObj.id : null),
+      source: 'database'
+    });
+    if (custObj?.name) setCustomerName(custObj.name);
+    if (custObj?.phone) setPhone(custObj.phone);
+    setShowVehicleSelectModal(false);
+    setCustomerSearchResults([]);
+    setCustomerSearchQuery('');
+  }
+
   useEffect(() => {
     let url = '/wash-types';
     if (customerType === 'workshop') {
@@ -391,34 +463,261 @@ return (
           </button>
         </div>
 
-        {/* Step 1: Vehicle Lookup Input */}
+        {/* Step 1: Vehicle Lookup / Returning Customer Input */}
         <div className="field mb-16">
-          <label style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block', color: 'var(--muted)' }}>
-            Registration Number
-          </label>
-          <div className="flex gap-8">
-            <input
-              type="text"
-              placeholder="e.g. KL32L2011"
-              value={regNumber}
-              autoCapitalize="characters"
-              autoComplete="off"
-              autoCorrect="off"
-              inputMode="text"
-              onChange={e => setRegNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-              onKeyDown={e => e.key === 'Enter' && lookup()}
-              style={{ fontSize: 16 }}
-            />
+          {/* Mode Switcher Tabs */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 14, background: '#f1f5f9', padding: 4, borderRadius: 10 }}>
             <button
-              className="btn btn-secondary"
-              onClick={lookup}
-              disabled={loading}
-              style={{ padding: '12px 18px', fontSize: 15 }}
+              type="button"
+              onClick={() => setEntryMode('plate')}
+              style={{
+                padding: '9px 6px',
+                fontSize: 13,
+                fontWeight: 700,
+                border: 'none',
+                borderRadius: 8,
+                background: entryMode === 'plate' ? '#0284c7' : 'transparent',
+                color: entryMode === 'plate' ? '#ffffff' : '#64748b',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
             >
-              {loading ? '...' : 'Fetch'}
+              📷 Plate / Reg No.
+            </button>
+            <button
+              type="button"
+              onClick={() => setEntryMode('customer')}
+              style={{
+                padding: '9px 6px',
+                fontSize: 13,
+                fontWeight: 700,
+                border: 'none',
+                borderRadius: 8,
+                background: entryMode === 'customer' ? '#0284c7' : 'transparent',
+                color: entryMode === 'customer' ? '#ffffff' : '#64748b',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              👤 Returning Customer
             </button>
           </div>
+
+          {/* MODE 1: PLATE SCAN / REG NO */}
+          {entryMode === 'plate' && (
+            <>
+              <label style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block', color: 'var(--muted)' }}>
+                Registration Number
+              </label>
+              <div className="flex gap-8">
+                <input
+                  type="text"
+                  placeholder="e.g. KL32L2011"
+                  value={regNumber}
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  inputMode="text"
+                  onChange={e => setRegNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                  onKeyDown={e => e.key === 'Enter' && lookup()}
+                  style={{ fontSize: 16 }}
+                />
+                <button
+                  className="btn btn-secondary"
+                  onClick={lookup}
+                  disabled={loading}
+                  style={{ padding: '12px 18px', fontSize: 15 }}
+                >
+                  {loading ? '...' : 'Fetch'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* MODE 2: RETURNING CUSTOMER SEARCH */}
+          {entryMode === 'customer' && (
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#0284c7', marginBottom: 6, display: 'block' }}>
+                Search Customer by Name or Phone
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  placeholder="e.g. Rahul Sharma or 9876543210..."
+                  value={customerSearchQuery}
+                  onChange={e => searchReturningCustomer(e.target.value)}
+                  style={{ paddingLeft: 36, fontSize: 15, fontWeight: 600, width: '100%' }}
+                  autoFocus
+                />
+                <span style={{ position: 'absolute', left: 12, top: 12, fontSize: 16, color: '#64748b' }}>🔍</span>
+              </div>
+
+              {searchingCustomers && (
+                <div style={{ fontSize: 13, color: '#0284c7', marginTop: 8, padding: '6px 8px', fontWeight: 600 }}>
+                  🔄 Searching customer database...
+                </div>
+              )}
+
+              {/* Customer Search Results */}
+              {customerSearchResults.length > 0 && (
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 260, overflowY: 'auto' }}>
+                  {customerSearchResults.map(c => (
+                    <div
+                      key={c.id || c.name}
+                      onClick={() => handleSelectCustomer(c)}
+                      style={{
+                        padding: '12px 14px',
+                        background: '#f0f9ff',
+                        border: '1.5px solid #0284c7',
+                        borderRadius: 12,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>
+                          👤 {c.name}
+                        </div>
+                        <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+                          {c.phone ? `📞 ${c.phone}` : 'No phone recorded'} • 🎁 {c.reward_points || 0} Reward Points
+                        </div>
+                        <div style={{ fontSize: 12, color: '#0369a1', fontWeight: 700, marginTop: 4 }}>
+                          🚘 {c.vehicles.length} Vehicle{c.vehicles.length === 1 ? '' : 's'}: {c.vehicles.map(v => `${v.reg_number} (${v.brand || ''} ${v.model || ''})`.trim()).join(', ')}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 18, color: '#0284c7', fontWeight: 800 }}>➔</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {customerSearchQuery.trim().length >= 2 && !searchingCustomers && customerSearchResults.length === 0 && (
+                <div style={{ padding: 12, marginTop: 10, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, fontSize: 13, color: '#b45309' }}>
+                  No customer found matching "{customerSearchQuery}". Use <strong>Plate / Reg No.</strong> to start job.
+                </div>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* Multi-Vehicle Picker Modal for Desktop */}
+        {showVehicleSelectModal && selectedCustomer && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(15, 23, 42, 0.65)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000,
+              padding: 16
+            }}
+            onClick={() => setShowVehicleSelectModal(false)}
+          >
+            <div
+              className="card"
+              style={{
+                width: '100%',
+                maxWidth: 460,
+                background: '#ffffff',
+                borderRadius: 16,
+                padding: '20px 24px',
+                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
+                maxHeight: '85vh',
+                overflowY: 'auto'
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#0f172a' }}>
+                    🚘 Select Vehicle for {selectedCustomer.name}
+                  </h3>
+                  <span style={{ fontSize: 12, color: '#64748b' }}>
+                    Choose which vehicle is visiting today
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowVehicleSelectModal(false)}
+                  style={{ background: '#f1f5f9', border: 'none', width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 15, color: '#64748b' }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+                {selectedCustomer.vehicles.map(v => (
+                  <div
+                    key={v.id || v.reg_number}
+                    onClick={() => selectCustomerVehicle(v)}
+                    style={{
+                      padding: '12px 14px',
+                      border: '2px solid #0284c7',
+                      background: '#f0f9ff',
+                      borderRadius: 12,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 16, color: '#0369a1', letterSpacing: '0.05em' }}>
+                        {v.reg_number}
+                      </div>
+                      <div style={{ fontSize: 13, color: '#1e293b', fontWeight: 600, marginTop: 2 }}>
+                        {v.brand} {v.model} ({v.segment})
+                      </div>
+                      {v.color && <div style={{ fontSize: 11.5, color: '#64748b' }}>Color: {v.color}</div>}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8 }}
+                    >
+                      Select ✓
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tempReg = `NEW-${Math.floor(1000 + Math.random() * 9000)}`;
+                    selectCustomerVehicle({
+                      id: null,
+                      reg_number: tempReg,
+                      brand: '',
+                      model: '',
+                      segment: 'hatchback',
+                      color: '',
+                      customer_id: selectedCustomer.id
+                    });
+                  }}
+                  style={{
+                    padding: '12px',
+                    border: '1.5px dashed #0284c7',
+                    background: '#ffffff',
+                    color: '#0284c7',
+                    borderRadius: 12,
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    marginTop: 4
+                  }}
+                >
+                  ➕ Add Another Vehicle for {selectedCustomer.name}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {vehicle && (
           <>

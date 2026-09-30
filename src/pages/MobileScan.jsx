@@ -89,6 +89,80 @@ export default function MobileScan() {
   const [customModelMode, setCustomModelMode] = useState(false);
   const [customColorMode, setCustomColorMode] = useState(false);
 
+  // Returning Customer Search States
+  const [entryMode, setEntryMode] = useState('plate'); // 'plate' | 'customer'
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [customerSearchResults, setCustomerSearchResults] = useState([]);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [showVehicleSelectModal, setShowVehicleSelectModal] = useState(false);
+
+  async function searchReturningCustomer(query) {
+    setCustomerSearchQuery(query);
+    if (!query || query.trim().length < 2) {
+      setCustomerSearchResults([]);
+      return;
+    }
+    setSearchingCustomers(true);
+    try {
+      const results = await api.get(`/customers/search?q=${encodeURIComponent(query.trim())}`);
+      setCustomerSearchResults(Array.isArray(results) ? results : []);
+    } catch (err) {
+      console.error('Customer search error:', err);
+    } finally {
+      setSearchingCustomers(false);
+    }
+  }
+
+  function handleSelectCustomer(customer) {
+    setSelectedCustomer(customer);
+    setCustomerName(customer.name || '');
+    if (customer.phone) setPhone(customer.phone);
+
+    const vehicles = customer.vehicles || [];
+    if (vehicles.length === 1) {
+      selectCustomerVehicle(vehicles[0], customer);
+    } else if (vehicles.length > 1) {
+      setShowVehicleSelectModal(true);
+    } else {
+      const tempReg = `NEW-${Math.floor(1000 + Math.random() * 9000)}`;
+      setRegNumber(tempReg);
+      setVehicle({
+        id: null,
+        reg_number: tempReg,
+        segment: 'hatchback',
+        brand: '',
+        model: '',
+        color: '',
+        source: 'manual',
+        customer_id: customer.id
+      });
+      setSuccessMsg(`ℹ️ Selected customer ${customer.name}. Please enter vehicle specs below.`);
+    }
+  }
+
+  function selectCustomerVehicle(v, custObj = selectedCustomer) {
+    const targetReg = (v.reg_number || '').toUpperCase();
+    setRegNumber(targetReg);
+    setVehicle({
+      id: v.id || null,
+      reg_number: targetReg,
+      brand: v.brand || '',
+      model: v.model || '',
+      segment: v.segment || 'hatchback',
+      color: v.color || '',
+      year: v.year || '',
+      customer_id: v.customer_id || (custObj ? custObj.id : null),
+      source: 'database'
+    });
+    if (custObj?.name) setCustomerName(custObj.name);
+    if (custObj?.phone) setPhone(custObj.phone);
+    setShowVehicleSelectModal(false);
+    setCustomerSearchResults([]);
+    setCustomerSearchQuery('');
+    setSuccessMsg(`✅ Selected vehicle ${targetReg} for ${custObj?.name || 'Customer'}`);
+  }
+
   useEffect(() => {
     let url = '/wash-types';
     if (customerType === 'workshop') {
@@ -518,91 +592,306 @@ export default function MobileScan() {
       </div>
 
       <div className="mobile-body">
-        {/* Step 1: Camera Scanner & Registration Number Entry */}
+        {/* Step 1: Camera Scanner, Plate No. or Returning Customer Search */}
         <div className="mobile-card mb-16">
-          <h3 className="mobile-card-title">📷 1. Scan or Enter Vehicle</h3>
+          <h3 className="mobile-card-title">1. Scan or Select Customer</h3>
 
-          {/* Native Camera & Gallery Trigger Inputs */}
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            id="mobile-ocr-camera"
-            style={{ display: 'none' }}
-            onChange={handlePlateOcr}
-          />
-          <input
-            type="file"
-            accept="image/*"
-            id="mobile-ocr-gallery"
-            style={{ display: 'none' }}
-            onChange={handlePlateOcr}
-          />
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+          {/* Mode Switcher Tabs */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 14, background: '#f1f5f9', padding: 4, borderRadius: 10 }}>
             <button
               type="button"
-              className="mobile-btn mobile-btn-camera"
-              onClick={() => document.getElementById('mobile-ocr-camera')?.click()}
-              disabled={ocrScanning || loading}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '12px 8px', fontSize: 13 }}
-            >
-              {ocrScanning ? '🔄 Scanning...' : '📸 Take Photo'}
-            </button>
-
-            <button
-              type="button"
-              className="mobile-btn mobile-btn-secondary"
-              onClick={() => document.getElementById('mobile-ocr-gallery')?.click()}
-              disabled={ocrScanning || loading}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '12px 8px', fontSize: 13, background: '#f8fafc', color: '#0f172a', border: '1.5px solid #cbd5e1' }}
-            >
-              🖼️ From Gallery
-            </button>
-          </div>
-
-          <div className="mobile-divider">OR TYPE MANUAL REGISTRATION</div>
-
-          <div className="mobile-input-group mt-12">
-            <input
-              type="text"
-              placeholder="e.g. KL07CD1234 (Leave blank for New Vehicle)"
-              value={regNumber}
-              autoCapitalize="characters"
-              autoComplete="off"
-              autoCorrect="off"
-              className="mobile-input reg-input"
-              onChange={e => setRegNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-              onKeyDown={e => e.key === 'Enter' && lookupVehicle()}
-            />
-            <button
-              type="button"
-              className="mobile-btn mobile-btn-secondary"
-              onClick={() => lookupVehicle()}
-              disabled={loading}
-              title="Click to fetch details or start manual entry"
-            >
-              {loading ? '...' : 'Fetch'}
-            </button>
-          </div>
-
-          <div style={{ marginTop: 10, textAlign: 'center' }}>
-            <button
-              type="button"
-              onClick={() => lookupVehicle('')}
+              onClick={() => setEntryMode('plate')}
               style={{
-                background: 'none',
-                border: 'none',
-                color: '#0284c7',
+                padding: '9px 6px',
                 fontSize: 12.5,
-                fontWeight: 600,
+                fontWeight: 700,
+                border: 'none',
+                borderRadius: 8,
+                background: entryMode === 'plate' ? '#0284c7' : 'transparent',
+                color: entryMode === 'plate' ? '#ffffff' : '#64748b',
                 cursor: 'pointer',
-                textDecoration: 'underline'
+                transition: 'all 0.2s ease'
               }}
             >
-              ✏️ No number plate / New Vehicle? Click to enter details manually
+              📷 Plate / Reg No.
+            </button>
+            <button
+              type="button"
+              onClick={() => setEntryMode('customer')}
+              style={{
+                padding: '9px 6px',
+                fontSize: 12.5,
+                fontWeight: 700,
+                border: 'none',
+                borderRadius: 8,
+                background: entryMode === 'customer' ? '#0284c7' : 'transparent',
+                color: entryMode === 'customer' ? '#ffffff' : '#64748b',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              👤 Returning Customer
             </button>
           </div>
+
+          {/* MODE 1: PLATE SCAN / REG NO */}
+          {entryMode === 'plate' && (
+            <>
+              {/* Native Camera & Gallery Trigger Inputs */}
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                id="mobile-ocr-camera"
+                style={{ display: 'none' }}
+                onChange={handlePlateOcr}
+              />
+              <input
+                type="file"
+                accept="image/*"
+                id="mobile-ocr-gallery"
+                style={{ display: 'none' }}
+                onChange={handlePlateOcr}
+              />
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                <button
+                  type="button"
+                  className="mobile-btn mobile-btn-camera"
+                  onClick={() => document.getElementById('mobile-ocr-camera')?.click()}
+                  disabled={ocrScanning || loading}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '12px 8px', fontSize: 13 }}
+                >
+                  {ocrScanning ? '🔄 Scanning...' : '📸 Take Photo'}
+                </button>
+
+                <button
+                  type="button"
+                  className="mobile-btn mobile-btn-secondary"
+                  onClick={() => document.getElementById('mobile-ocr-gallery')?.click()}
+                  disabled={ocrScanning || loading}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '12px 8px', fontSize: 13, background: '#f8fafc', color: '#0f172a', border: '1.5px solid #cbd5e1' }}
+                >
+                  🖼️ From Gallery
+                </button>
+              </div>
+
+              <div className="mobile-divider">OR TYPE MANUAL REGISTRATION</div>
+
+              <div className="mobile-input-group mt-12">
+                <input
+                  type="text"
+                  placeholder="e.g. KL07CD1234 (Leave blank for New Vehicle)"
+                  value={regNumber}
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  className="mobile-input reg-input"
+                  onChange={e => setRegNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                  onKeyDown={e => e.key === 'Enter' && lookupVehicle()}
+                />
+                <button
+                  type="button"
+                  className="mobile-btn mobile-btn-secondary"
+                  onClick={() => lookupVehicle()}
+                  disabled={loading}
+                  title="Click to fetch details or start manual entry"
+                >
+                  {loading ? '...' : 'Fetch'}
+                </button>
+              </div>
+
+              <div style={{ marginTop: 10, textAlign: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => lookupVehicle('')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#0284c7',
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  ✏️ No number plate / New Vehicle? Click to enter details manually
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* MODE 2: RETURNING CUSTOMER SEARCH */}
+          {entryMode === 'customer' && (
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#0284c7', marginBottom: 6, display: 'block' }}>
+                Search Customer by Name or Phone
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  className="mobile-input"
+                  placeholder="e.g. Rahul Sharma or 9876543210..."
+                  value={customerSearchQuery}
+                  onChange={e => searchReturningCustomer(e.target.value)}
+                  style={{ paddingLeft: 36, fontSize: 14.5, fontWeight: 600 }}
+                  autoFocus
+                />
+                <span style={{ position: 'absolute', left: 12, top: 12, fontSize: 15, color: '#64748b' }}>🔍</span>
+              </div>
+
+              {searchingCustomers && (
+                <div style={{ fontSize: 12.5, color: '#0284c7', marginTop: 8, padding: '6px 8px', fontWeight: 600 }}>
+                  🔄 Searching customers...
+                </div>
+              )}
+
+              {/* Customer Search Results */}
+              {customerSearchResults.length > 0 && (
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 260, overflowY: 'auto' }}>
+                  {customerSearchResults.map(c => (
+                    <div
+                      key={c.id || c.name}
+                      onClick={() => handleSelectCustomer(c)}
+                      style={{
+                        padding: '12px',
+                        background: '#f0f9ff',
+                        border: '1.5px solid #0284c7',
+                        borderRadius: 12,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>
+                          👤 {c.name}
+                        </div>
+                        <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+                          {c.phone ? `📞 ${c.phone}` : 'No phone recorded'} • 🎁 {c.reward_points || 0} Reward Points
+                        </div>
+                        <div style={{ fontSize: 11.5, color: '#0369a1', fontWeight: 700, marginTop: 4 }}>
+                          🚘 {c.vehicles.length} Vehicle{c.vehicles.length === 1 ? '' : 's'}: {c.vehicles.map(v => `${v.reg_number} (${v.brand || ''} ${v.model || ''})`.trim()).join(', ')}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 18, color: '#0284c7', fontWeight: 800 }}>➔</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {customerSearchQuery.trim().length >= 2 && !searchingCustomers && customerSearchResults.length === 0 && (
+                <div style={{ padding: 12, marginTop: 10, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, fontSize: 12.5, color: '#b45309' }}>
+                  No customer found matching "{customerSearchQuery}". Use <strong>Plate / Reg No.</strong> or enter vehicle manually below.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Multi-Vehicle Picker Modal */}
+          {showVehicleSelectModal && selectedCustomer && (
+            <div className="modal-backdrop" onClick={() => setShowVehicleSelectModal(false)}>
+              <div
+                className="mobile-card"
+                style={{
+                  width: '100%',
+                  maxWidth: 440,
+                  background: '#ffffff',
+                  borderRadius: 20,
+                  padding: '20px',
+                  boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
+                  maxHeight: '85vh',
+                  overflowY: 'auto'
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>
+                      🚘 Select Vehicle for {selectedCustomer.name}
+                    </h3>
+                    <span style={{ fontSize: 12, color: '#64748b' }}>
+                      Choose which vehicle is visiting today
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowVehicleSelectModal(false)}
+                    style={{ background: '#f1f5f9', border: 'none', width: 30, height: 30, borderRadius: '50%', cursor: 'pointer', fontSize: 15, color: '#64748b' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+                  {selectedCustomer.vehicles.map(v => (
+                    <div
+                      key={v.id || v.reg_number}
+                      onClick={() => selectCustomerVehicle(v)}
+                      style={{
+                        padding: '12px 14px',
+                        border: '2px solid #0284c7',
+                        background: '#f0f9ff',
+                        borderRadius: 12,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 16, color: '#0369a1', letterSpacing: '0.05em' }}>
+                          {v.reg_number}
+                        </div>
+                        <div style={{ fontSize: 13, color: '#1e293b', fontWeight: 600, marginTop: 2 }}>
+                          {v.brand} {v.model} ({v.segment})
+                        </div>
+                        {v.color && <div style={{ fontSize: 11.5, color: '#64748b' }}>Color: {v.color}</div>}
+                      </div>
+                      <button
+                        type="button"
+                        className="mobile-btn"
+                        style={{ background: '#0284c7', color: '#ffffff', padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, width: 'auto' }}
+                      >
+                        Select ✓
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tempReg = `NEW-${Math.floor(1000 + Math.random() * 9000)}`;
+                      selectCustomerVehicle({
+                        id: null,
+                        reg_number: tempReg,
+                        brand: '',
+                        model: '',
+                        segment: 'hatchback',
+                        color: '',
+                        customer_id: selectedCustomer.id
+                      });
+                    }}
+                    style={{
+                      padding: '12px',
+                      border: '1.5px dashed #0284c7',
+                      background: '#ffffff',
+                      color: '#0284c7',
+                      borderRadius: 12,
+                      fontWeight: 700,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      marginTop: 4
+                    }}
+                  >
+                    ➕ Add Another Vehicle for {selectedCustomer.name}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {vehicle?.source === 'mock' && (
             <p className="mobile-hint-text">
