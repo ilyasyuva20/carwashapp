@@ -13,6 +13,7 @@ const MAX_WASH_OPTIONS = [
 export default function Subscriptions() {
   const [subscriptions, setSubscriptions] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [workshops, setWorkshops] = useState([]);
   const [customerVehicles, setCustomerVehicles] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -144,12 +145,14 @@ export default function Subscriptions() {
   async function loadData() {
     setLoading(true);
     try {
-      const [subsData, custsData] = await Promise.all([
+      const [subsData, custsData, workshopsData] = await Promise.all([
         api.get('/subscriptions'),
-        api.get('/customers')
+        api.get('/customers'),
+        api.get('/workshops')
       ]);
       setSubscriptions(subsData || []);
       setCustomers(custsData || []);
+      setWorkshops(workshopsData || []);
     } catch (err) {
       console.error('Error loading subscriptions data:', err);
     } finally {
@@ -320,6 +323,32 @@ export default function Subscriptions() {
       alert(err.message || 'Failed to delete subscription');
     }
   }
+
+  // Filter out workshops from retail customer dropdowns
+  const workshopNames = (workshops || []).map(w => (w.name || '').toLowerCase().trim()).filter(Boolean);
+  const workshopPhones = new Set((workshops || []).map(w => (w.phone || w.owner_phone || '').replace(/\D/g, '')).filter(Boolean));
+
+  const retailCustomers = customers.filter(c => {
+    const cName = (c.name || '').toLowerCase().trim();
+    const cPhone = (c.phone || '').replace(/\D/g, '');
+
+    // Explicit workshop name match or substring match
+    if (workshopNames.some(wName => wName && (cName === wName || cName.includes(wName) || wName.includes(cName)))) {
+      return false;
+    }
+
+    // Phone match with workshop
+    if (cPhone && cPhone.length >= 7 && workshopPhones.has(cPhone)) {
+      return false;
+    }
+
+    // Keyword check for workshop/worksop/garage/service center
+    if (/workshop|worksop|garage|service center/i.test(cName)) {
+      return false;
+    }
+
+    return true;
+  });
 
   // Filtered subscriptions
   const filteredSubs = subscriptions.filter(sub => {
@@ -527,7 +556,7 @@ export default function Subscriptions() {
       {/* 1. ADD / EDIT SUBSCRIPTION MODAL */}
       {showSubModal && (
         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="card" style={{ width: '100%', maxWidth: 580, maxHeight: '92vh', overflowY: 'auto' }}>
+          <div className="card" style={{ width: '100%', maxWidth: 640, maxHeight: '92vh', overflowY: 'auto' }}>
             <h3 style={{ marginTop: 0 }}>Add Customer Monthly Package</h3>
 
             {/* Mode Switcher Tabs */}
@@ -719,7 +748,7 @@ export default function Subscriptions() {
                       onChange={e => handleCustomerChange(e.target.value)}
                     >
                       <option value="">-- Choose Customer --</option>
-                      {customers.map(c => (
+                      {retailCustomers.map(c => (
                         <option key={c.id} value={c.id}>
                           {c.name || 'Unnamed'} ({c.phone || 'No phone'})
                         </option>
@@ -729,15 +758,15 @@ export default function Subscriptions() {
 
                   {/* Single-Vehicle Radio Selector */}
                   {subForm.customer_id && (
-                    <div className="field" style={{ background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid var(--border)', marginBottom: 16 }}>
-                      <div className="flex between center mb-8">
-                        <label style={{ fontWeight: 600, color: 'var(--text)', margin: 0 }}>
+                    <div className="field" style={{ background: '#f8fafc', padding: 14, borderRadius: 12, border: '1px solid var(--border)', marginBottom: 16 }}>
+                      <div className="flex between center mb-12">
+                        <label style={{ fontWeight: 700, color: 'var(--text)', margin: 0, fontSize: 14 }}>
                           Select Covered Vehicle for Subscription *
                         </label>
                         <button
                           type="button"
                           className="btn btn-secondary"
-                          style={{ fontSize: 12, padding: '4px 8px' }}
+                          style={{ fontSize: 12, padding: '4px 10px' }}
                           onClick={() => setShowAddVehForm(!showAddVehForm)}
                         >
                           {showAddVehForm ? '✕ Close Form' : '➕ Add Vehicle to Customer'}
@@ -855,33 +884,98 @@ export default function Subscriptions() {
                           No vehicles registered yet for this customer. Click "➕ Add Vehicle to Customer" above.
                         </p>
                       ) : (
-                        <div className="flex gap-8 wrap">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 12 }}>
                           {customerVehicles.map(v => {
                             const isChecked = subForm.selected_vehicles.includes(v.id);
+                            const categoryIcon = v.category === 'bike' ? '🏍️' : v.category === 'scooter' ? '🛵' : '🚗';
+                            const formattedSegment = (v.segment || '').replace(/_/g, ' ').toUpperCase();
+
                             return (
-                              <label
+                              <div
                                 key={v.id}
+                                onClick={() => setSubForm(prev => ({ ...prev, selected_vehicles: [v.id] }))}
                                 style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  padding: '8px 14px',
-                                  borderRadius: 8,
-                                  background: isChecked ? 'var(--teal-light)' : 'white',
-                                  border: isChecked ? '2px solid var(--teal)' : '1px solid var(--border)',
+                                  border: isChecked ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                                  background: isChecked ? '#f0f9ff' : '#ffffff',
+                                  boxShadow: isChecked ? '0 4px 12px rgba(2, 132, 199, 0.16)' : '0 1px 3px rgba(0,0,0,0.04)',
+                                  borderRadius: 12,
+                                  padding: '12px 14px',
                                   cursor: 'pointer',
-                                  fontSize: 13,
-                                  fontWeight: isChecked ? 600 : 400
+                                  transition: 'all 0.15s ease-in-out',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  justifyContent: 'space-between',
+                                  position: 'relative'
                                 }}
                               >
-                                <input
-                                  type="radio"
-                                  name="sub_vehicle_select"
-                                  checked={isChecked}
-                                  onChange={() => setSubForm(prev => ({ ...prev, selected_vehicles: [v.id] }))}
-                                />
-                                <span>🚗 {v.reg_number} ({v.brand} {v.model})</span>
-                              </label>
+                                {/* Header Row: Radio Circle & Category Icon + Status Pill */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <div style={{
+                                      width: 18,
+                                      height: 18,
+                                      borderRadius: '50%',
+                                      border: isChecked ? '6px solid #0284c7' : '2px solid #94a3b8',
+                                      background: '#ffffff',
+                                      boxSizing: 'border-box',
+                                      transition: 'all 0.15s ease'
+                                    }} />
+                                    <span style={{ fontSize: 18 }}>{categoryIcon}</span>
+                                  </div>
+                                  {isChecked && (
+                                    <span style={{
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      textTransform: 'uppercase',
+                                      color: '#0284c7',
+                                      background: '#e0f2fe',
+                                      padding: '2px 8px',
+                                      borderRadius: 12,
+                                      letterSpacing: '0.5px'
+                                    }}>
+                                      ✓ Selected
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Plate Badge */}
+                                <div style={{ marginBottom: 8 }}>
+                                  <span style={{
+                                    display: 'inline-block',
+                                    fontFamily: 'monospace',
+                                    fontWeight: 800,
+                                    fontSize: 13,
+                                    letterSpacing: '0.8px',
+                                    color: '#0f172a',
+                                    background: '#fef08a',
+                                    border: '1.5px solid #1e293b',
+                                    borderRadius: 4,
+                                    padding: '2px 8px',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.08)'
+                                  }}>
+                                    {v.reg_number || 'NO REG'}
+                                  </span>
+                                </div>
+
+                                {/* Brand, Model & Specs */}
+                                <div>
+                                  <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', lineHeight: '1.3' }}>
+                                    {v.brand || ''} {v.model || ''}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
+                                    {v.segment && (
+                                      <span style={{ fontSize: 11, color: '#475569', background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, fontWeight: 500 }}>
+                                        {formattedSegment}
+                                      </span>
+                                    )}
+                                    {v.color && (
+                                      <span style={{ fontSize: 11, color: '#475569', background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, fontWeight: 500 }}>
+                                        🎨 {v.color}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                             );
                           })}
                         </div>
