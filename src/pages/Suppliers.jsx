@@ -84,31 +84,41 @@ export default function Suppliers() {
     setScanningBill(true);
 
     try {
-      const result = await recognizeInvoice(file);
-      const invoice = result.invoice || {};
+      const invoice = await recognizeInvoice(file);
+      console.log('[SUPPLIER BILL SCAN RESULT]:', invoice);
 
-      if (!result.text || result.text.length < 5) {
-        alert('Could not clearly read text from this bill image. Please upload a clear photo or enter details manually.');
+      if (!invoice) {
+        alert('Could not process this bill image. Please upload a clear photo or enter details manually.');
         setScanningBill(false);
         return;
       }
 
+      const supplierName = invoice.supplier_name || invoice.supplierName || invoice.supplier || '';
+      const invoiceNo = invoice.invoice_number || invoice.invoiceNo || invoice.invoice_no || '';
+      const date = invoice.invoice_date || invoice.invoiceDate || invoice.date || new Date().toISOString().slice(0, 10);
+      const totalAmount = invoice.total_amount || invoice.totalAmount || 0;
+      const balanceAmount = (invoice.balance_amount !== undefined && invoice.balance_amount !== null)
+        ? invoice.balance_amount
+        : (invoice.balanceAmount !== undefined ? invoice.balanceAmount : 0);
+      const items = invoice.items || [];
+      const rawText = invoice.raw_text || invoice.rawText || '';
+
       // Match supplier or find/create best fit
       let targetSupplier = null;
-      const extractedName = (invoice.supplierName || '').trim();
+      const extractedName = (supplierName || '').trim();
 
-      if (extractedName) {
+      if (extractedName && extractedName !== 'Unknown Supplier' && extractedName !== 'Scanned Supplier') {
         const lowerName = extractedName.toLowerCase();
-        targetSupplier = suppliers.find(s =>
-          (s.name || '').toLowerCase().includes(lowerName) ||
-          lowerName.includes((s.name || '').toLowerCase()) ||
-          (s.company_name || '').toLowerCase().includes(lowerName) ||
-          lowerName.includes((s.company_name || '').toLowerCase())
-        );
+        targetSupplier = suppliers.find(s => {
+          const sName = (s.name || '').toLowerCase();
+          const cName = (s.company_name || '').toLowerCase();
+          return sName.includes(lowerName) || lowerName.includes(sName) ||
+                 (cName && (cName.includes(lowerName) || lowerName.includes(cName)));
+        });
       }
 
-      if (!targetSupplier && extractedName) {
-        // Auto-create missing supplier
+      if (!targetSupplier && extractedName && extractedName !== 'Unknown Supplier' && extractedName !== 'Scanned Supplier') {
+        // Auto-create missing supplier automatically
         try {
           const created = await api.post('/suppliers', {
             name: extractedName,
@@ -122,36 +132,48 @@ export default function Suppliers() {
         }
       }
 
+      if (!targetSupplier && activeSupplier) {
+        targetSupplier = activeSupplier;
+      }
+
       if (!targetSupplier && suppliers.length > 0) {
         targetSupplier = suppliers[0];
       }
 
       // Format items detail string
       let detailsText = '';
-      if (invoice.items && invoice.items.length > 0) {
-        detailsText = invoice.items.map(it => {
-          let line = it.name;
-          if (it.quantity) line += ` (Qty: ${it.quantity}${it.unit ? ' ' + it.unit : ''})`;
-          if (it.amount) line += ` - ₹${it.amount}`;
+      if (items.length > 0) {
+        detailsText = items.map(it => {
+          const name = it.name || it.item_name || 'Item';
+          const qty = it.qty || it.quantity || '';
+          const amt = it.amount || it.total || '';
+          let line = name;
+          if (qty) line += ` (Qty: ${qty})`;
+          if (amt) line += ` - ₹${amt}`;
           return line;
         }).join('\n');
+      } else if (rawText) {
+        detailsText = rawText.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean).slice(0, 6).join('\n');
       } else {
         detailsText = 'Supplier Bill Purchase';
       }
 
-      const total = invoice.totalAmount || 0;
-      const balance = (invoice.balanceAmount !== null && invoice.balanceAmount !== undefined) ? invoice.balanceAmount : 0;
+      const total = Number(totalAmount) || 0;
+      const balance = Number(balanceAmount) || 0;
       const paid = total > 0 ? Math.max(0, total - balance) : 0;
 
-      setActiveSupplier(targetSupplier);
+      if (targetSupplier) {
+        setActiveSupplier(targetSupplier);
+      }
+
       setPurchaseForm({
         item_details: detailsText,
-        category: targetSupplier?.category || 'Shampoo',
+        category: targetSupplier?.category || activeSupplier?.category || 'Shampoo',
         total_amount: total ? String(total) : '',
         paid_amount: paid ? String(paid) : '',
         payment_method: 'cash',
-        date: invoice.date || new Date().toISOString().slice(0, 10),
-        note: invoice.invoiceNo ? `Bill #${invoice.invoiceNo}` : 'AI Bill Scan'
+        date: date || new Date().toISOString().slice(0, 10),
+        note: invoiceNo ? `Bill #${invoiceNo}` : 'AI Bill Scan'
       });
 
       setShowPurchaseModal(true);
@@ -661,26 +683,37 @@ export default function Suppliers() {
       {showPurchaseModal && activeSupplier && (
         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card" style={{ width: '100%', maxWidth: 480 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={{ margin: 0 }}>🛒 Record Product Purchase</h3>
-              <button
-                type="button"
-                onClick={() => setShowPurchaseModal(false)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  fontSize: 22,
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  color: 'var(--muted)',
-                  padding: '2px 8px',
-                  borderRadius: 6,
-                  lineHeight: 1
-                }}
-                title="Close"
-              >
-                ✕
-              </button>
+              <div className="flex gap-8 center">
+                <button
+                  type="button"
+                  className="btn btn-secondary flex center gap-4"
+                  style={{ padding: '4px 10px', fontSize: 12, border: '1px solid #38bdf8', color: '#38bdf8' }}
+                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                  title="Upload bill photo to auto-fill items and total"
+                >
+                  📄 Upload Bill
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPurchaseModal(false)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    fontSize: 22,
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    color: 'var(--muted)',
+                    padding: '2px 8px',
+                    borderRadius: 6,
+                    lineHeight: 1
+                  }}
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <form onSubmit={submitPurchase}>
               <div className="field mb-12">
