@@ -1154,8 +1154,8 @@ return (
                         </>
                       ) : (
                         <label style={{ cursor: 'pointer', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, padding: 4 }}>
-                          <span style={{ fontSize: 18 }}>📸</span>
-                          <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Photo {slot + 1}</span>
+                          <span style={{ fontSize: 20 }}>📷</span>
+                          <span style={{ fontSize: 10, color: '#0284c7', fontWeight: 700 }}>Take Photo {slot + 1}</span>
                           <input
                             type="file"
                             accept="image/*"

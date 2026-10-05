@@ -1196,11 +1196,12 @@ export default function MobileScan() {
                         </>
                       ) : (
                         <label style={{ cursor: 'pointer', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, padding: 2 }}>
-                          <span style={{ fontSize: 16 }}>📸</span>
-                          <span style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 500 }}>Photo {slot + 1}</span>
+                          <span style={{ fontSize: 18 }}>📷</span>
+                          <span style={{ fontSize: 9.5, color: '#0284c7', fontWeight: 700 }}>Take Photo {slot + 1}</span>
                           <input
                             type="file"
                             accept="image/*"
+                            capture="environment"
                             onChange={e => handleBeforePhotoUpload(e, slot)}
                             style={{ display: 'none' }}
                           />
