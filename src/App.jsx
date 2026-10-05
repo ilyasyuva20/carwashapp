@@ -12,6 +12,8 @@ import Payroll from './pages/Payroll.jsx';
 import Expenses from './pages/Expenses.jsx';
 import Reports from './pages/Reports.jsx';
 import Workshops from './pages/Workshops.jsx';
+import Suppliers from './pages/Suppliers.jsx';
+import Subscriptions from './pages/Subscriptions.jsx';
 import SalaryAdvances from './pages/SalaryAdvances.jsx';
 import MobileScan from './pages/MobileScan.jsx';
 import MobileJobs from './pages/MobileJobs.jsx';
@@ -50,7 +52,10 @@ export default function App() {
           <Route path="/payroll" element={<Payroll />} />
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/workshops" element={<Workshops />} />
+          <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/subscriptions" element={<Subscriptions />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/reports/:reportType" element={<Reports />} />
           <Route path="/mobile" element={<MobileScan />} />
           <Route path="/mobile/jobs" element={<MobileJobs />} />
           <Route path="/mobile/bills" element={<MobileBills />} />

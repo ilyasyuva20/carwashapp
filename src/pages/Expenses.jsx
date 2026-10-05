@@ -6,8 +6,13 @@ const CATEGORIES = [
   { value: 'fuel', label: 'Fuel (Petrol/Diesel)' },
   { value: 'rental', label: 'Rental' },
   { value: 'electricity', label: 'Electricity' },
+  { value: 'staff_grocery', label: 'Staff Grocery' },
+  { value: 'owner_advance', label: 'Owner Advance' },
   { value: 'other', label: 'Other' }
 ];
+
+const categoryMap = CATEGORIES.reduce((acc, c) => ({ ...acc, [c.value]: c.label }), {});
+const getCategoryLabel = (val) => categoryMap[val] || val;
 
 export default function Expenses() {
   const [expenses, setExpenses] = useState([]);
@@ -97,7 +102,7 @@ export default function Expenses() {
 
           <div className="field">
             <label>Note</label>
-            <input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="e.g. Shampoo, wax purchase" />
+            <input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="e.g. Shampoo, Grocery purchase" />
           </div>
           <div className="field">
             <label>Date</label>
@@ -113,7 +118,7 @@ export default function Expenses() {
             <div className="list-row" key={e.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
               <div>
                 <strong style={{ fontSize: 15 }}>₹{e.amount}</strong>{' '}
-                <span className="pill pill-teal" style={{ fontSize: 11 }}>{e.category}</span>{' '}
+                <span className="pill pill-teal" style={{ fontSize: 11 }}>{getCategoryLabel(e.category)}</span>{' '}
                 <span
                   style={{
                     fontSize: 11,
@@ -137,4 +142,3 @@ export default function Expenses() {
     </div>
   );
 }
-

@@ -77,8 +77,12 @@ export default function MobileBills() {
   async function handleSettlePayment(jobId, method) {
     setSettlingId(jobId);
     try {
+      if (editingJobId === jobId && editingAmount !== '' && !isNaN(Number(editingAmount)) && Number(editingAmount) >= 0) {
+        await api.post('/bills/adjust-amount', { job_id: jobId, new_amount: Number(editingAmount) });
+        setEditingJobId(null);
+      }
       await api.post('/bills/settle-job', { job_id: jobId, payment_method: method });
-      fetchBills();
+      await fetchBills();
     } catch (err) {
       alert('Failed to process payment: ' + (err.message || 'Error occurred'));
     } finally {
