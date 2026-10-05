@@ -28,6 +28,51 @@ export default function Bills() {
   const [editingAmount, setEditingAmount] = useState('');
   const [savingPrice, setSavingPrice] = useState(false);
 
+  // Workshop Assignment State
+  const [workshops, setWorkshops] = useState([]);
+  const [assigningWorkshopJob, setAssigningWorkshopJob] = useState(null);
+  const [selectedCustType, setSelectedCustType] = useState('workshop');
+  const [selectedWorkshopId, setSelectedWorkshopId] = useState('');
+  const [savingWorkshop, setSavingWorkshop] = useState(false);
+
+  useEffect(() => {
+    api.get('/workshops').then(res => setWorkshops(res || [])).catch(console.error);
+  }, []);
+
+  function openWorkshopModal(job) {
+    setAssigningWorkshopJob(job);
+    const isW = job.customer_type === 'workshop';
+    setSelectedCustType(isW ? 'workshop' : 'workshop');
+
+    const is2W = job.vehicle?.segment === 'bike' || job.vehicle?.segment === 'scooter';
+    const avail = (workshops || []).filter(w => is2W ? (w.type === 'Bike Workshop' || w.type === '2_wheeler' || (w.type || '').toLowerCase().includes('bike')) : (w.type === 'Car Workshop' || w.type === '4_wheeler' || (w.type || '').toLowerCase().includes('car')));
+
+    setSelectedWorkshopId(job.workshop_id ? String(job.workshop_id) : (avail[0]?.id ? String(avail[0].id) : ''));
+  }
+
+  async function handleSaveWorkshopAssignment(e) {
+    e.preventDefault();
+    if (!assigningWorkshopJob) return;
+    if (selectedCustType === 'workshop' && !selectedWorkshopId) {
+      alert('Please select a workshop from the list');
+      return;
+    }
+
+    setSavingWorkshop(true);
+    try {
+      await api.put(`/jobs/${assigningWorkshopJob.id}`, {
+        customer_type: selectedCustType,
+        workshop_id: selectedCustType === 'workshop' ? Number(selectedWorkshopId) : null
+      });
+      setAssigningWorkshopJob(null);
+      loadData();
+    } catch (err) {
+      alert('Failed to update workshop assignment: ' + (err.message || 'Error'));
+    } finally {
+      setSavingWorkshop(false);
+    }
+  }
+
   async function handleSaveAdjustedAmount(jobId) {
     if (editingAmount === '' || isNaN(Number(editingAmount)) || Number(editingAmount) < 0) {
       alert('Please enter a valid amount');
@@ -414,6 +459,52 @@ export default function Bills() {
                       <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
                         {job.vehicle?.brand || 'Vehicle'} {job.vehicle?.model || ''}
                       </div>
+
+                      <div style={{ marginTop: 4 }}>
+                        {job.customer_type === 'workshop' ? (
+                          <button
+                            type="button"
+                            onClick={() => openWorkshopModal(job)}
+                            style={{
+                              background: '#f0fdf4',
+                              color: '#15803d',
+                              border: '1px solid #bbf7d0',
+                              borderRadius: 6,
+                              padding: '2px 6px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3
+                            }}
+                            title="Click to edit or change assigned workshop"
+                          >
+                            🏭 Workshop: <strong>{job.workshop?.name || 'Assigned Workshop'}</strong> ✏️
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openWorkshopModal(job)}
+                            style={{
+                              background: '#f0fdfa',
+                              color: '#0f766e',
+                              border: '1px solid #ccfbf1',
+                              borderRadius: 6,
+                              padding: '2px 6px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3
+                            }}
+                            title="Assign this vehicle to a workshop"
+                          >
+                            ➕ Assign Workshop
+                          </button>
+                        )}
+                      </div>
                     </td>
 
                     {/* CONTACT NUMBER */}
@@ -592,12 +683,101 @@ export default function Bills() {
         />
       )}
 
-      {/* Printable Receipt Modal */}
-      {selectedReceiptJob && (
-        <PrintReceiptModal
-          job={selectedReceiptJob}
-          onClose={() => setSelectedReceiptJob(null)}
-        />
+      {/* 🏭 ASSIGN WORKSHOP MODAL */}
+      {assigningWorkshopJob && (
+        <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 460, padding: 22, borderRadius: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>🏭 Assign Workshop Vehicle</h3>
+              <button
+                type="button"
+                onClick={() => setAssigningWorkshopJob(null)}
+                style={{ background: 'transparent', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748b' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, marginBottom: 14, border: '1px solid #e2e8f0', fontSize: 13 }}>
+              <div>Vehicle Reg #: <strong style={{ fontSize: 15, color: '#0f172a' }}>{assigningWorkshopJob.vehicle?.reg_number || assigningWorkshopJob.reg_number}</strong></div>
+              <div style={{ color: '#0d9488', fontSize: 12, marginTop: 2, fontWeight: 600 }}>
+                Segment: {assigningWorkshopJob.vehicle?.segment === 'bike' || assigningWorkshopJob.vehicle?.segment === 'scooter' ? '🏍️ 2-Wheeler (Bike / Scooter)' : '🚗 4-Wheeler (Car / SUV / Sedan)'}
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveWorkshopAssignment}>
+              <div className="field mb-14">
+                <label style={{ fontSize: 13, fontWeight: 600 }}>Customer Type</label>
+                <div className="flex gap-8 mt-4">
+                  <button
+                    type="button"
+                    className={`btn ${selectedCustType === 'workshop' ? 'btn-primary' : 'btn-outline'}`}
+                    style={{ flex: 1, padding: 8, fontSize: 12 }}
+                    onClick={() => setSelectedCustType('workshop')}
+                  >
+                    🏭 Workshop Vehicle
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${selectedCustType === 'normal' ? 'btn-primary' : 'btn-outline'}`}
+                    style={{ flex: 1, padding: 8, fontSize: 12 }}
+                    onClick={() => setSelectedCustType('normal')}
+                  >
+                    👤 Retail Customer
+                  </button>
+                </div>
+              </div>
+
+              {selectedCustType === 'workshop' && (
+                <div className="field mb-14">
+                  <label style={{ fontSize: 13, fontWeight: 600 }}>
+                    Select {(assigningWorkshopJob.vehicle?.segment === 'bike' || assigningWorkshopJob.vehicle?.segment === 'scooter') ? '2-Wheeler Workshop 🏍️' : '4-Wheeler Workshop 🚗'} *
+                  </label>
+                  {(() => {
+                    const is2W = assigningWorkshopJob.vehicle?.segment === 'bike' || assigningWorkshopJob.vehicle?.segment === 'scooter';
+                    const avail = (workshops || []).filter(w => is2W ? (w.type === 'Bike Workshop' || w.type === '2_wheeler' || (w.type || '').toLowerCase().includes('bike')) : (w.type === 'Car Workshop' || w.type === '4_wheeler' || (w.type || '').toLowerCase().includes('car')));
+
+                    return (
+                      <>
+                        <select
+                          required
+                          value={selectedWorkshopId}
+                          onChange={e => setSelectedWorkshopId(e.target.value)}
+                          style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }}
+                        >
+                          <option value="">-- Select Workshop --</option>
+                          {avail.map(w => (
+                            <option key={w.id} value={w.id}>
+                              {w.name} ({w.type}) {w.phone ? `· 📞 ${w.phone}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {avail.length === 0 && (
+                          <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4, fontWeight: 600 }}>
+                            ⚠️ No {is2W ? '2-wheeler (Bike)' : '4-wheeler (Car)'} workshops registered yet. Please add one in Workshop Management.
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+
+              <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>
+                💡 Assigning a workshop automatically updates the bill amount based on workshop pricing for this vehicle segment.
+              </p>
+
+              <div className="flex gap-8 justify-end">
+                <button type="button" className="btn btn-outline" onClick={() => setAssigningWorkshopJob(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={savingWorkshop}>
+                  {savingWorkshop ? 'Saving...' : 'Save & Update Bill'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
