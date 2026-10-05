@@ -12,6 +12,8 @@ export default function Attendance() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [employees, setEmployees] = useState([]);
   const [attendance, setAttendance] = useState([]);
+  const [editingCin, setEditingCin] = useState(null); // { empId, check_in }
+  const [editingCout, setEditingCout] = useState(null); // { empId, check_out }
   const [editingLate, setEditingLate] = useState(null); // { empId, late_minutes }
   const [editingOt, setEditingOt] = useState(null); // { empId, overtime_minutes }
 
@@ -36,13 +38,27 @@ export default function Attendance() {
     return new Date().toTimeString().slice(0, 5);
   }
 
-  async function clockIn(empId) {
-    await api.post('/attendance/clock-in', { employee_id: empId, date, time: nowTime() });
+  async function clockIn(empId, customTime) {
+    const timeToUse = customTime || nowTime();
+    await api.post('/attendance/clock-in', { employee_id: empId, date, time: timeToUse });
     load();
   }
 
-  async function clockOut(empId) {
-    await api.post('/attendance/clock-out', { employee_id: empId, date, time: nowTime() });
+  async function clockOut(empId, customTime) {
+    const timeToUse = customTime || nowTime();
+    await api.post('/attendance/clock-out', { employee_id: empId, date, time: timeToUse });
+    load();
+  }
+
+  async function updateCheckIn(empId, check_in) {
+    await api.post('/attendance/update', { employee_id: empId, date, check_in, status: 'present' });
+    setEditingCin(null);
+    load();
+  }
+
+  async function updateCheckOut(empId, check_out) {
+    await api.post('/attendance/update', { employee_id: empId, date, check_out });
+    setEditingCout(null);
     load();
   }
 
@@ -112,19 +128,104 @@ export default function Attendance() {
                     <div className="muted" style={{ fontSize: 12 }}>{e.role || 'Washer'}</div>
                   </td>
 
-                  <td style={{ padding: '14px 16px', fontWeight: 600 }}>
-                    {a?.check_in ? (
-                      <span style={{ color: 'var(--teal-dark)' }}>⏱️ {a.check_in}</span>
+                  {/* Check In Column */}
+                  <td style={{ padding: '14px 16px' }}>
+                    {editingCin?.empId === e.id ? (
+                      <div className="flex gap-4 center">
+                        <input
+                          type="time"
+                          style={{ padding: '4px 6px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border)' }}
+                          value={editingCin.check_in}
+                          onChange={ev => setEditingCin({ ...editingCin, check_in: ev.target.value })}
+                          autoFocus
+                        />
+                        <button
+                          className="btn btn-primary"
+                          style={{ padding: '3px 8px', fontSize: 11 }}
+                          onClick={() => updateCheckIn(e.id, editingCin.check_in)}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          className="btn btn-outline"
+                          style={{ padding: '3px 8px', fontSize: 11 }}
+                          onClick={() => setEditingCin(null)}
+                        >
+                          ✕
+                        </button>
+                      </div>
                     ) : (
-                      <span className="muted">-</span>
+                      <div className="flex gap-6 center" style={{ flexWrap: 'wrap' }}>
+                        {a?.check_in ? (
+                          <span style={{ fontWeight: 700, color: 'var(--teal-dark)' }}>⏱️ {a.check_in}</span>
+                        ) : (
+                          <span className="muted">-</span>
+                        )}
+                        <div className="flex gap-4">
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            style={{ fontSize: 10, padding: '2px 6px', background: '#f1f5f9' }}
+                            title="Set 09:30 AM Shift Start"
+                            onClick={() => updateCheckIn(e.id, '09:30')}
+                          >
+                            09:30
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            style={{ fontSize: 10, padding: '2px 6px', background: '#f1f5f9' }}
+                            onClick={() => setEditingCin({ empId: e.id, check_in: a?.check_in || '09:30' })}
+                          >
+                            ✏️ Edit
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </td>
 
-                  <td style={{ padding: '14px 16px', fontWeight: 600 }}>
-                    {a?.check_out ? (
-                      <span style={{ color: 'var(--teal-dark)' }}>🏁 {a.check_out}</span>
+                  {/* Check Out Column */}
+                  <td style={{ padding: '14px 16px' }}>
+                    {editingCout?.empId === e.id ? (
+                      <div className="flex gap-4 center">
+                        <input
+                          type="time"
+                          style={{ padding: '4px 6px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border)' }}
+                          value={editingCout.check_out}
+                          onChange={ev => setEditingCout({ ...editingCout, check_out: ev.target.value })}
+                          autoFocus
+                        />
+                        <button
+                          className="btn btn-primary"
+                          style={{ padding: '3px 8px', fontSize: 11 }}
+                          onClick={() => updateCheckOut(e.id, editingCout.check_out)}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          className="btn btn-outline"
+                          style={{ padding: '3px 8px', fontSize: 11 }}
+                          onClick={() => setEditingCout(null)}
+                        >
+                          ✕
+                        </button>
+                      </div>
                     ) : (
-                      <span className="muted">-</span>
+                      <div className="flex gap-6 center" style={{ flexWrap: 'wrap' }}>
+                        {a?.check_out ? (
+                          <span style={{ fontWeight: 700, color: 'var(--teal-dark)' }}>🏁 {a.check_out}</span>
+                        ) : (
+                          <span className="muted">-</span>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          style={{ fontSize: 10, padding: '2px 6px', background: '#f1f5f9' }}
+                          onClick={() => setEditingCout({ empId: e.id, check_out: a?.check_out || '19:30' })}
+                        >
+                          ✏️ Edit
+                        </button>
+                      </div>
                     )}
                   </td>
 
@@ -295,4 +396,5 @@ export default function Attendance() {
     </div>
   );
 }
+
 
