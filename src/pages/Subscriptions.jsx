@@ -35,7 +35,7 @@ export default function Subscriptions() {
     phone: ''
   });
   const [newVehicles, setNewVehicles] = useState([
-    { reg_number: '', brand: '', model: '', segment: 'hatchback' }
+    { reg_number: '', brand: '', model: '', color: '', segment: 'hatchback', category: 'car', loadingRTO: false }
   ]);
 
   // Inline add vehicle for existing customer
@@ -44,8 +44,74 @@ export default function Subscriptions() {
     reg_number: '',
     brand: '',
     model: '',
-    segment: 'hatchback'
+    color: '',
+    segment: 'hatchback',
+    category: 'car',
+    loadingRTO: false
   });
+
+  // Perform automatic RTO vehicle lookup
+  async function performRTOLookup(regNumber, callback) {
+    const clean = (regNumber || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!clean || clean.length < 4) return;
+    try {
+      const v = await api.get(`/vehicles/lookup/${clean}`);
+      if (v && !v.not_found) {
+        const category = v.segment === 'bike' ? 'bike' : v.segment === 'scooter' ? 'scooter' : 'car';
+        const segment = v.segment || 'hatchback';
+        callback({
+          brand: v.brand || '',
+          model: v.model || '',
+          color: v.color || '',
+          segment,
+          category,
+          owner_name: v.customer_name || v.owner_name || '',
+          phone: v.phone || ''
+        });
+      }
+    } catch (err) {
+      console.error('RTO lookup error:', err);
+    }
+  }
+
+  async function handleVehicleRegBlur(index, regNumber) {
+    if (!regNumber || regNumber.trim().length < 4) return;
+    updateVehicleRow(index, 'loadingRTO', true);
+    await performRTOLookup(regNumber, (data) => {
+      setNewVehicles(prev => prev.map((item, i) => i === index ? {
+        ...item,
+        brand: data.brand || item.brand,
+        model: data.model || item.model,
+        color: data.color || item.color,
+        segment: data.segment || item.segment,
+        category: data.category || item.category,
+        loadingRTO: false
+      } : item));
+
+      setNewCustomer(prev => ({
+        name: prev.name || data.owner_name || '',
+        phone: prev.phone || data.phone || ''
+      }));
+    });
+    updateVehicleRow(index, 'loadingRTO', false);
+  }
+
+  async function handleInlineVehRegBlur(regNumber) {
+    if (!regNumber || regNumber.trim().length < 4) return;
+    setInlineVeh(prev => ({ ...prev, loadingRTO: true }));
+    await performRTOLookup(regNumber, (data) => {
+      setInlineVeh(prev => ({
+        ...prev,
+        brand: data.brand || prev.brand,
+        model: data.model || prev.model,
+        color: data.color || prev.color,
+        segment: data.segment || prev.segment,
+        category: data.category || prev.category,
+        loadingRTO: false
+      }));
+    });
+    setInlineVeh(prev => ({ ...prev, loadingRTO: false }));
+  }
 
   // Subscription Form state
   const [subForm, setSubForm] = useState({
@@ -113,7 +179,7 @@ export default function Subscriptions() {
   function addVehicleRow() {
     setNewVehicles(prev => [
       ...prev,
-      { reg_number: '', brand: '', model: '', segment: 'hatchback' }
+      { reg_number: '', brand: '', model: '', color: '', segment: 'hatchback', category: 'car', loadingRTO: false }
     ]);
   }
 
@@ -133,8 +199,8 @@ export default function Subscriptions() {
     if (!subForm.customer_id) return alert('Select a customer first');
 
     try {
-      const res = await api.post(`/customers/${subForm.customer_id}/vehicles`, inlineVeh);
-      setInlineVeh({ reg_number: '', brand: '', model: '', segment: 'hatchback' });
+      await api.post(`/customers/${subForm.customer_id}/vehicles`, inlineVeh);
+      setInlineVeh({ reg_number: '', brand: '', model: '', color: '', segment: 'hatchback', category: 'car', loadingRTO: false });
       setShowAddVehForm(false);
       // Refresh customer vehicles
       handleCustomerChange(subForm.customer_id);
@@ -147,9 +213,9 @@ export default function Subscriptions() {
     setEditingSub(null);
     setCustomerMode('new');
     setNewCustomer({ name: '', phone: '' });
-    setNewVehicles([{ reg_number: '', brand: '', model: '', segment: 'hatchback' }]);
+    setNewVehicles([{ reg_number: '', brand: '', model: '', color: '', segment: 'hatchback', category: 'car', loadingRTO: false }]);
     setShowAddVehForm(false);
-    setInlineVeh({ reg_number: '', brand: '', model: '', segment: 'hatchback' });
+    setInlineVeh({ reg_number: '', brand: '', model: '', color: '', segment: 'hatchback', category: 'car', loadingRTO: false });
 
     setSubForm({
       customer_id: '',
@@ -544,14 +610,16 @@ export default function Subscriptions() {
                     </div>
 
                     {newVehicles.map((v, idx) => (
-                      <div key={idx} className="card mb-8" style={{ padding: 10, background: 'white' }}>
-                        <div className="flex between center mb-6">
-                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--teal-dark)' }}>Vehicle #{idx + 1}</span>
+                      <div key={idx} className="card mb-12" style={{ padding: 12, background: 'white', border: '1px solid var(--border)', borderRadius: 10 }}>
+                        <div className="flex between center mb-8">
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--teal-dark)' }}>
+                            🚗 Vehicle #{idx + 1} {v.loadingRTO && <span style={{ fontSize: 11, color: '#0284c7', fontWeight: 400 }}> (🔍 Fetching RTO details...)</span>}
+                          </span>
                           {newVehicles.length > 1 && (
                             <button
                               type="button"
                               className="btn btn-outline"
-                              style={{ padding: '2px 6px', fontSize: 11, color: 'var(--red)', borderColor: '#fecdd3' }}
+                              style={{ padding: '2px 8px', fontSize: 11, color: 'var(--red)', borderColor: '#fecdd3' }}
                               onClick={() => removeVehicleRow(idx)}
                             >
                               ✕ Remove
@@ -559,39 +627,120 @@ export default function Subscriptions() {
                           )}
                         </div>
 
-                        <div className="grid grid-3">
-                          <div className="field" style={{ marginBottom: 4 }}>
-                            <label style={{ fontSize: 11 }}>Reg Number *</label>
+                        {/* Reg Number & RTO Fetch */}
+                        <div className="field mb-8">
+                          <label style={{ fontSize: 11, fontWeight: 600 }}>Plate / Reg Number *</label>
+                          <div className="flex gap-8">
                             <input
                               required
                               value={v.reg_number}
-                              onChange={e => updateVehicleRow(idx, 'reg_number', e.target.value)}
-                              placeholder="KL-07-AB-1234"
-                              style={{ textTransform: 'uppercase', padding: '6px 8px', fontSize: 13 }}
+                              onChange={e => updateVehicleRow(idx, 'reg_number', e.target.value.toUpperCase())}
+                              onBlur={e => handleVehicleRegBlur(idx, e.target.value)}
+                              placeholder="e.g. KL-32-R-4034"
+                              style={{ textTransform: 'uppercase', padding: '6px 8px', fontSize: 13, fontWeight: 600 }}
                             />
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '4px 10px', fontSize: 11, whiteSpace: 'nowrap' }}
+                              onClick={() => handleVehicleRegBlur(idx, v.reg_number)}
+                            >
+                              {v.loadingRTO ? '⏳ Fetching...' : '🔍 Fetch RTO'}
+                            </button>
                           </div>
-                          <div className="field" style={{ marginBottom: 4 }}>
-                            <label style={{ fontSize: 11 }}>Brand & Model</label>
-                            <input
-                              value={v.brand}
-                              onChange={e => updateVehicleRow(idx, 'brand', e.target.value)}
-                              placeholder="e.g. Maruti Swift"
-                              style={{ padding: '6px 8px', fontSize: 13 }}
-                            />
+                        </div>
+
+                        {/* Vehicle Category Selection */}
+                        <div className="field mb-8">
+                          <label style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, display: 'block' }}>Vehicle Category</label>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                            <button
+                              type="button"
+                              className={`btn ${v.category === 'car' ? 'btn-primary' : 'btn-outline'}`}
+                              style={{ padding: '4px 6px', fontSize: 11, fontWeight: 600 }}
+                              onClick={() => {
+                                updateVehicleRow(idx, 'category', 'car');
+                                if (v.segment === 'bike' || v.segment === 'scooter') {
+                                  updateVehicleRow(idx, 'segment', 'hatchback');
+                                }
+                              }}
+                            >
+                              🚗 Car
+                            </button>
+                            <button
+                              type="button"
+                              className={`btn ${v.category === 'bike' ? 'btn-primary' : 'btn-outline'}`}
+                              style={{ padding: '4px 6px', fontSize: 11, fontWeight: 600 }}
+                              onClick={() => {
+                                updateVehicleRow(idx, 'category', 'bike');
+                                updateVehicleRow(idx, 'segment', 'bike');
+                              }}
+                            >
+                              🏍️ Bike
+                            </button>
+                            <button
+                              type="button"
+                              className={`btn ${v.category === 'scooter' ? 'btn-primary' : 'btn-outline'}`}
+                              style={{ padding: '4px 6px', fontSize: 11, fontWeight: 600 }}
+                              onClick={() => {
+                                updateVehicleRow(idx, 'category', 'scooter');
+                                updateVehicleRow(idx, 'segment', 'scooter');
+                              }}
+                            >
+                              🛵 Scooter
+                            </button>
                           </div>
-                          <div className="field" style={{ marginBottom: 4 }}>
-                            <label style={{ fontSize: 11 }}>Type / Segment</label>
+                        </div>
+
+                        {/* Car Body Segment Dropdown */}
+                        {v.category === 'car' && (
+                          <div className="field mb-8">
+                            <label style={{ fontSize: 11, fontWeight: 600 }}>Car Body Segment *</label>
                             <select
-                              value={v.segment}
+                              value={v.segment || 'hatchback'}
                               onChange={e => updateVehicleRow(idx, 'segment', e.target.value)}
-                              style={{ padding: '6px 8px', fontSize: 13 }}
+                              style={{ padding: '6px 8px', fontSize: 12 }}
                             >
                               <option value="hatchback">Hatchback</option>
-                              <option value="sedan">Sedan</option>
-                              <option value="suv">SUV / MUV</option>
-                              <option value="bike">Bike</option>
-                              <option value="scooter">Scooter</option>
+                              <option value="sedan_compact_suv">Sedan / Compact SUV</option>
+                              <option value="suv">SUV</option>
+                              <option value="premium_hatch">Premium Hatch</option>
+                              <option value="premium_sedan_suv">Premium Sedan / SUV</option>
+                              <option value="muv">MUV</option>
                             </select>
+                          </div>
+                        )}
+
+                        {/* Brand, Model, Color Specs Grid */}
+                        <div className="grid grid-3">
+                          <div className="field" style={{ marginBottom: 0 }}>
+                            <label style={{ fontSize: 11 }}>Brand *</label>
+                            <input
+                              required
+                              value={v.brand}
+                              onChange={e => updateVehicleRow(idx, 'brand', e.target.value)}
+                              placeholder="e.g. TATA"
+                              style={{ padding: '6px 8px', fontSize: 12 }}
+                            />
+                          </div>
+                          <div className="field" style={{ marginBottom: 0 }}>
+                            <label style={{ fontSize: 11 }}>Model *</label>
+                            <input
+                              required
+                              value={v.model}
+                              onChange={e => updateVehicleRow(idx, 'model', e.target.value)}
+                              placeholder="e.g. Altroz"
+                              style={{ padding: '6px 8px', fontSize: 12 }}
+                            />
+                          </div>
+                          <div className="field" style={{ marginBottom: 0 }}>
+                            <label style={{ fontSize: 11 }}>Color</label>
+                            <input
+                              value={v.color}
+                              onChange={e => updateVehicleRow(idx, 'color', e.target.value)}
+                              placeholder="e.g. Red"
+                              style={{ padding: '6px 8px', fontSize: 12 }}
+                            />
                           </div>
                         </div>
                       </div>
@@ -638,33 +787,105 @@ export default function Subscriptions() {
 
                       {/* Inline Form to add a new vehicle to existing customer */}
                       {showAddVehForm && (
-                        <div className="card mb-12" style={{ padding: 10, background: 'white' }}>
-                          <h5 style={{ margin: '0 0 8px 0', color: 'var(--teal-dark)' }}>Add New Vehicle for this Customer</h5>
+                        <div className="card mb-12" style={{ padding: 12, background: 'white', border: '1px solid var(--border)', borderRadius: 10 }}>
+                          <h5 style={{ margin: '0 0 10px 0', color: 'var(--teal-dark)' }}>
+                            Add New Vehicle for this Customer {inlineVeh.loadingRTO && <span style={{ fontSize: 11, color: '#0284c7', fontWeight: 400 }}> (🔍 Fetching RTO...)</span>}
+                          </h5>
+
+                          {/* Reg Number & RTO Button */}
+                          <div className="field mb-8">
+                            <label style={{ fontSize: 11, fontWeight: 600 }}>Plate / Reg Number *</label>
+                            <div className="flex gap-8">
+                              <input
+                                placeholder="Reg No (e.g. KL-07-AB-1234)"
+                                value={inlineVeh.reg_number}
+                                onChange={e => setInlineVeh({ ...inlineVeh, reg_number: e.target.value.toUpperCase() })}
+                                onBlur={e => handleInlineVehRegBlur(e.target.value)}
+                                style={{ textTransform: 'uppercase', padding: '6px 8px', fontSize: 12, fontWeight: 600 }}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: '4px 10px', fontSize: 11, whiteSpace: 'nowrap' }}
+                                onClick={() => handleInlineVehRegBlur(inlineVeh.reg_number)}
+                              >
+                                {inlineVeh.loadingRTO ? '⏳ Fetching...' : '🔍 Fetch RTO'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Category Buttons */}
+                          <div className="field mb-8">
+                            <label style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, display: 'block' }}>Vehicle Category</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                              <button
+                                type="button"
+                                className={`btn ${inlineVeh.category === 'car' ? 'btn-primary' : 'btn-outline'}`}
+                                style={{ padding: '4px 6px', fontSize: 11, fontWeight: 600 }}
+                                onClick={() => setInlineVeh({ ...inlineVeh, category: 'car', segment: inlineVeh.segment === 'bike' || inlineVeh.segment === 'scooter' ? 'hatchback' : inlineVeh.segment })}
+                              >
+                                🚗 Car
+                              </button>
+                              <button
+                                type="button"
+                                className={`btn ${inlineVeh.category === 'bike' ? 'btn-primary' : 'btn-outline'}`}
+                                style={{ padding: '4px 6px', fontSize: 11, fontWeight: 600 }}
+                                onClick={() => setInlineVeh({ ...inlineVeh, category: 'bike', segment: 'bike' })}
+                              >
+                                🏍️ Bike
+                              </button>
+                              <button
+                                type="button"
+                                className={`btn ${inlineVeh.category === 'scooter' ? 'btn-primary' : 'btn-outline'}`}
+                                style={{ padding: '4px 6px', fontSize: 11, fontWeight: 600 }}
+                                onClick={() => setInlineVeh({ ...inlineVeh, category: 'scooter', segment: 'scooter' })}
+                              >
+                                🛵 Scooter
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Car Body Segment Dropdown */}
+                          {inlineVeh.category === 'car' && (
+                            <div className="field mb-8">
+                              <label style={{ fontSize: 11, fontWeight: 600 }}>Car Body Segment *</label>
+                              <select
+                                value={inlineVeh.segment || 'hatchback'}
+                                onChange={e => setInlineVeh({ ...inlineVeh, segment: e.target.value })}
+                                style={{ padding: '6px 8px', fontSize: 12 }}
+                              >
+                                <option value="hatchback">Hatchback</option>
+                                <option value="sedan_compact_suv">Sedan / Compact SUV</option>
+                                <option value="suv">SUV</option>
+                                <option value="premium_hatch">Premium Hatch</option>
+                                <option value="premium_sedan_suv">Premium Sedan / SUV</option>
+                                <option value="muv">MUV</option>
+                              </select>
+                            </div>
+                          )}
+
                           <div className="grid grid-3 mb-8">
                             <input
-                              placeholder="Reg No (KL-07-AB-1234)"
-                              value={inlineVeh.reg_number}
-                              onChange={e => setInlineVeh({ ...inlineVeh, reg_number: e.target.value })}
-                              style={{ textTransform: 'uppercase', padding: '6px 8px', fontSize: 13 }}
-                            />
-                            <input
-                              placeholder="Brand & Model"
+                              placeholder="Brand (e.g. TATA)"
                               value={inlineVeh.brand}
                               onChange={e => setInlineVeh({ ...inlineVeh, brand: e.target.value })}
-                              style={{ padding: '6px 8px', fontSize: 13 }}
+                              style={{ padding: '6px 8px', fontSize: 12 }}
                             />
-                            <select
-                              value={inlineVeh.segment}
-                              onChange={e => setInlineVeh({ ...inlineVeh, segment: e.target.value })}
-                              style={{ padding: '6px 8px', fontSize: 13 }}
-                            >
-                              <option value="hatchback">Hatchback</option>
-                              <option value="sedan">Sedan</option>
-                              <option value="suv">SUV</option>
-                              <option value="bike">Bike</option>
-                            </select>
+                            <input
+                              placeholder="Model (e.g. Altroz)"
+                              value={inlineVeh.model}
+                              onChange={e => setInlineVeh({ ...inlineVeh, model: e.target.value })}
+                              style={{ padding: '6px 8px', fontSize: 12 }}
+                            />
+                            <input
+                              placeholder="Color (e.g. Red)"
+                              value={inlineVeh.color}
+                              onChange={e => setInlineVeh({ ...inlineVeh, color: e.target.value })}
+                              style={{ padding: '6px 8px', fontSize: 12 }}
+                            />
                           </div>
-                          <button type="button" className="btn btn-primary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={handleAddInlineVehicle}>
+
+                          <button type="button" className="btn btn-primary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={handleAddInlineVehicle}>
                             Save Vehicle
                           </button>
                         </div>
