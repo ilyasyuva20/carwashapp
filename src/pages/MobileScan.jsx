@@ -399,8 +399,8 @@ export default function MobileScan() {
       setError('Please select a workshop for workshop customer vehicles');
       return;
     }
-    if (!customerName || !customerName.trim()) {
-      setError(customerType === 'workshop' ? 'Workshop Partner Name is required' : 'Customer Name is required');
+    if (customerType === 'workshop' && (!customerName || !customerName.trim())) {
+      setError('Workshop Partner Name is required');
       return;
     }
     const cleanPhone = (phone || '').replace(/\D/g, '');
@@ -1126,7 +1126,13 @@ export default function MobileScan() {
             {/* Customer Name & Phone */}
             <div className="mobile-grid-2 mb-12">
               <div>
-                <label className="mobile-sublabel">{customerType === 'workshop' ? 'Workshop Name' : 'Customer Name'} <span style={{ color: '#ef4444' }}>*</span></label>
+                <label className="mobile-sublabel">
+                  {customerType === 'workshop' ? (
+                    <>Workshop Name <span style={{ color: '#ef4444' }}>*</span></>
+                  ) : (
+                    <>Customer Name <span style={{ fontWeight: 400, color: '#64748b' }}>(Optional)</span></>
+                  )}
+                </label>
                 <input
                   type="text"
                   className="mobile-input-sm"

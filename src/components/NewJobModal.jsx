@@ -323,8 +323,8 @@ function getImageUrl(url) {
       setError('Please select a workshop for workshop customer vehicles');
       return;
     }
-    if (!customerName || !customerName.trim()) {
-      setError(customerType === 'workshop' ? 'Workshop Partner Name is required' : 'Customer Name is required');
+    if (customerType === 'workshop' && (!customerName || !customerName.trim())) {
+      setError('Workshop Partner Name is required');
       return;
     }
     const cleanPhone = (phone || '').replace(/\D/g, '');
@@ -1083,7 +1083,11 @@ return (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }} className="mb-16">
               <div>
                 <label style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block', color: 'var(--muted)' }}>
-                  {customerType === 'workshop' ? 'Workshop Name' : 'Customer Name'} <span style={{ color: '#ef4444' }}>*</span>
+                  {customerType === 'workshop' ? (
+                    <>Workshop Name <span style={{ color: '#ef4444' }}>*</span></>
+                  ) : (
+                    <>Customer Name <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(Optional)</span></>
+                  )}
                 </label>
                 <input
                   type="text"
