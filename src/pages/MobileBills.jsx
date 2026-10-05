@@ -40,6 +40,11 @@ export default function MobileBills() {
   const [selectedCustType, setSelectedCustType] = useState('workshop');
   const [selectedWorkshopId, setSelectedWorkshopId] = useState('');
   const [savingWorkshop, setSavingWorkshop] = useState(false);
+  const [showAddWorkshopForm, setShowAddWorkshopForm] = useState(false);
+  const [newWName, setNewWName] = useState('');
+  const [newWPhone, setNewWPhone] = useState('');
+  const [newWOwnerName, setNewWOwnerName] = useState('');
+  const [addingWorkshop, setAddingWorkshop] = useState(false);
 
   useEffect(() => {
     api.get('/workshops').then(res => setWorkshops(res || [])).catch(console.error);
@@ -47,6 +52,7 @@ export default function MobileBills() {
 
   function openWorkshopModal(job) {
     setAssigningWorkshopJob(job);
+    setShowAddWorkshopForm(false);
     const isW = job.customer_type === 'workshop';
     setSelectedCustType(isW ? 'workshop' : 'workshop');
 
@@ -54,6 +60,35 @@ export default function MobileBills() {
     const avail = (workshops || []).filter(w => is2W ? (w.type === 'Bike Workshop' || w.type === '2_wheeler' || (w.type || '').toLowerCase().includes('bike')) : (w.type === 'Car Workshop' || w.type === '4_wheeler' || (w.type || '').toLowerCase().includes('car')));
 
     setSelectedWorkshopId(job.workshop_id ? String(job.workshop_id) : (avail[0]?.id ? String(avail[0].id) : ''));
+  }
+
+  async function handleCreateInlineWorkshop(e) {
+    e.preventDefault();
+    if (!newWName.trim()) {
+      alert('Please enter workshop name');
+      return;
+    }
+    setAddingWorkshop(true);
+    try {
+      const is2W = assigningWorkshopJob?.vehicle?.segment === 'bike' || assigningWorkshopJob?.vehicle?.segment === 'scooter';
+      const type = is2W ? 'Bike Workshop' : 'Car Workshop';
+      const created = await api.post('/workshops', {
+        name: newWName.trim(),
+        phone: newWPhone.trim() || null,
+        owner_name: newWOwnerName.trim() || null,
+        type
+      });
+      setWorkshops(prev => [created, ...(prev || [])]);
+      setSelectedWorkshopId(String(created.id));
+      setShowAddWorkshopForm(false);
+      setNewWName('');
+      setNewWPhone('');
+      setNewWOwnerName('');
+    } catch (err) {
+      alert('Failed to create workshop: ' + (err.message || 'Error'));
+    } finally {
+      setAddingWorkshop(false);
+    }
   }
 
   async function handleSaveWorkshopAssignment(e) {
@@ -68,7 +103,8 @@ export default function MobileBills() {
     try {
       await api.put(`/jobs/${assigningWorkshopJob.id}`, {
         customer_type: selectedCustType,
-        workshop_id: selectedCustType === 'workshop' ? Number(selectedWorkshopId) : null
+        workshop_id: selectedCustType === 'workshop' ? Number(selectedWorkshopId) : null,
+        offer_price: null
       });
       setAssigningWorkshopJob(null);
       fetchBills();
@@ -655,12 +691,12 @@ export default function MobileBills() {
       {/* 🏭 ASSIGN WORKSHOP MODAL */}
       {assigningWorkshopJob && (
         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
-          <div className="card" style={{ width: '100%', maxWidth: 440, padding: 20, borderRadius: 16 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 440, padding: 20, borderRadius: 16, maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>🏭 Assign Workshop Vehicle</h3>
               <button
                 type="button"
-                onClick={() => setAssigningWorkshopJob(null)}
+                onClick={() => { setAssigningWorkshopJob(null); setShowAddWorkshopForm(false); }}
                 style={{ background: 'transparent', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748b' }}
               >
                 ✕
@@ -699,9 +735,78 @@ export default function MobileBills() {
 
               {selectedCustType === 'workshop' && (
                 <div className="field mb-14">
-                  <label style={{ fontSize: 13, fontWeight: 600 }}>
-                    Select {(assigningWorkshopJob.vehicle?.segment === 'bike' || assigningWorkshopJob.vehicle?.segment === 'scooter') ? '2-Wheeler Workshop 🏍️' : '4-Wheeler Workshop 🚗'} *
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>
+                      Select {(assigningWorkshopJob.vehicle?.segment === 'bike' || assigningWorkshopJob.vehicle?.segment === 'scooter') ? '2-Wheeler Workshop 🏍️' : '4-Wheeler Workshop 🚗'} *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddWorkshopForm(!showAddWorkshopForm)}
+                      style={{
+                        background: '#f0fdf4',
+                        color: '#166534',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: 6,
+                        padding: '2px 8px',
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {showAddWorkshopForm ? '✕ Close' : '➕ Add New Workshop'}
+                    </button>
+                  </div>
+
+                  {/* Inline New Workshop Form */}
+                  {showAddWorkshopForm && (
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: 12, borderRadius: 10, marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#166534', marginBottom: 8 }}>
+                        ✨ Quick Add New Workshop
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Workshop Name *"
+                        value={newWName}
+                        onChange={e => setNewWName(e.target.value)}
+                        style={{ width: '100%', padding: '7px 10px', fontSize: 13, borderRadius: 6, border: '1px solid #cbd5e1', marginBottom: 6 }}
+                      />
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                        <input
+                          type="text"
+                          placeholder="Phone (Optional)"
+                          value={newWPhone}
+                          onChange={e => setNewWPhone(e.target.value)}
+                          style={{ flex: 1, padding: '6px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #cbd5e1' }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Owner Name"
+                          value={newWOwnerName}
+                          onChange={e => setNewWOwnerName(e.target.value)}
+                          style={{ flex: 1, padding: '6px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #cbd5e1' }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCreateInlineWorkshop}
+                        disabled={addingWorkshop}
+                        style={{
+                          width: '100%',
+                          background: '#166534',
+                          color: '#fff',
+                          border: 'none',
+                          padding: '7px',
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {addingWorkshop ? 'Saving Workshop...' : 'Save & Select Workshop'}
+                      </button>
+                    </div>
+                  )}
+
                   {(() => {
                     const is2W = assigningWorkshopJob.vehicle?.segment === 'bike' || assigningWorkshopJob.vehicle?.segment === 'scooter';
                     const avail = (workshops || []).filter(w => is2W ? (w.type === 'Bike Workshop' || w.type === '2_wheeler' || (w.type || '').toLowerCase().includes('bike')) : (w.type === 'Car Workshop' || w.type === '4_wheeler' || (w.type || '').toLowerCase().includes('car')));
@@ -721,9 +826,9 @@ export default function MobileBills() {
                             </option>
                           ))}
                         </select>
-                        {avail.length === 0 && (
+                        {avail.length === 0 && !showAddWorkshopForm && (
                           <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4, fontWeight: 600 }}>
-                            ⚠️ No {is2W ? '2-wheeler (Bike)' : '4-wheeler (Car)'} workshops registered yet. Please add one in Workshop Management.
+                            ⚠️ No {is2W ? '2-wheeler (Bike)' : '4-wheeler (Car)'} workshops registered yet. Click <strong>➕ Add New Workshop</strong> above to create one.
                           </p>
                         )}
                       </>
