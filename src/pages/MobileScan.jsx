@@ -725,13 +725,13 @@ export default function MobileScan() {
           {entryMode === 'customer' && (
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, color: '#0284c7', marginBottom: 6, display: 'block' }}>
-                Search Customer by Name or Phone
+                Search Customer, Reg No, or Subscription
               </label>
               <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   className="mobile-input"
-                  placeholder="e.g. Rahul Sharma or 9876543210..."
+                  placeholder="e.g. Muhammed Ilyas, KL32R4034, 9876543210..."
                   value={customerSearchQuery}
                   onChange={e => searchReturningCustomer(e.target.value)}
                   style={{ paddingLeft: 36, fontSize: 14.5, fontWeight: 600 }}
@@ -742,7 +742,7 @@ export default function MobileScan() {
 
               {searchingCustomers && (
                 <div style={{ fontSize: 12.5, color: '#0284c7', marginTop: 8, padding: '6px 8px', fontWeight: 600 }}>
-                  🔄 Searching customers...
+                  🔄 Searching customer database & subscriptions...
                 </div>
               )}
 
@@ -755,8 +755,8 @@ export default function MobileScan() {
                       onClick={() => handleSelectCustomer(c)}
                       style={{
                         padding: '12px',
-                        background: '#f0f9ff',
-                        border: '1.5px solid #0284c7',
+                        background: c.has_active_subscription ? '#f0fdf4' : '#f0f9ff',
+                        border: c.has_active_subscription ? '1.5px solid #16a34a' : '1.5px solid #0284c7',
                         borderRadius: 12,
                         cursor: 'pointer',
                         display: 'flex',
@@ -765,17 +765,27 @@ export default function MobileScan() {
                       }}
                     >
                       <div>
-                        <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>
-                          👤 {c.name}
+                        <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span>👤 {c.name}</span>
+                          {c.has_active_subscription && (
+                            <span style={{ fontSize: 10, background: '#dcfce7', color: '#15803d', border: '1px solid #86efac', padding: '2px 8px', borderRadius: 12, fontWeight: 700 }}>
+                              ✨ Monthly Subscription
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
                           {c.phone ? `📞 ${c.phone}` : 'No phone recorded'} • 🎁 {c.reward_points || 0} Reward Points
+                          {c.active_subscription && (
+                            <span style={{ color: '#15803d', fontWeight: 600, marginLeft: 6 }}>
+                              ({c.active_subscription.plan_name || 'Active Pass'})
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: 11.5, color: '#0369a1', fontWeight: 700, marginTop: 4 }}>
-                          🚘 {c.vehicles.length} Vehicle{c.vehicles.length === 1 ? '' : 's'}: {c.vehicles.map(v => `${v.reg_number} (${v.brand || ''} ${v.model || ''})`.trim()).join(', ')}
+                          🚘 {c.vehicles.length} Vehicle{c.vehicles.length === 1 ? '' : 's'}: {c.vehicles.map(v => `${v.reg_number}${v.subscription ? ' (✨ Subscribed)' : ''} (${v.brand || ''} ${v.model || ''})`.trim()).join(', ')}
                         </div>
                       </div>
-                      <span style={{ fontSize: 18, color: '#0284c7', fontWeight: 800 }}>➔</span>
+                      <span style={{ fontSize: 18, color: c.has_active_subscription ? '#16a34a' : '#0284c7', fontWeight: 800 }}>➔</span>
                     </div>
                   ))}
                 </div>
@@ -831,8 +841,8 @@ export default function MobileScan() {
                       onClick={() => selectCustomerVehicle(v)}
                       style={{
                         padding: '12px 14px',
-                        border: '2px solid #0284c7',
-                        background: '#f0f9ff',
+                        border: v.subscription ? '2px solid #16a34a' : '2px solid #0284c7',
+                        background: v.subscription ? '#f0fdf4' : '#f0f9ff',
                         borderRadius: 12,
                         cursor: 'pointer',
                         display: 'flex',
@@ -841,18 +851,23 @@ export default function MobileScan() {
                       }}
                     >
                       <div>
-                        <div style={{ fontWeight: 800, fontSize: 16, color: '#0369a1', letterSpacing: '0.05em' }}>
+                        <div style={{ fontWeight: 800, fontSize: 16, color: v.subscription ? '#15803d' : '#0369a1', letterSpacing: '0.05em' }}>
                           {v.reg_number}
                         </div>
                         <div style={{ fontSize: 13, color: '#1e293b', fontWeight: 600, marginTop: 2 }}>
                           {v.brand} {v.model} ({v.segment})
                         </div>
+                        {v.subscription && (
+                          <div style={{ fontSize: 11, color: '#15803d', fontWeight: 700, marginTop: 2 }}>
+                            ✨ Active Monthly Subscription ({v.subscription.plan_name || 'Pass'})
+                          </div>
+                        )}
                         {v.color && <div style={{ fontSize: 11.5, color: '#64748b' }}>Color: {v.color}</div>}
                       </div>
                       <button
                         type="button"
                         className="mobile-btn"
-                        style={{ background: '#0284c7', color: '#ffffff', padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, width: 'auto' }}
+                        style={{ background: v.subscription ? '#16a34a' : '#0284c7', color: '#ffffff', padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, width: 'auto' }}
                       >
                         Select ✓
                       </button>
