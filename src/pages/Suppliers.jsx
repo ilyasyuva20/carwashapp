@@ -337,8 +337,18 @@ export default function Suppliers() {
                     </td>
                     <td style={{ padding: '10px 12px' }}>₹{s.total_purchases || 0}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--green)', fontWeight: 600 }}>₹{s.total_paid || 0}</td>
-                    <td style={{ padding: '10px 12px', color: (s.pending_balance || 0) > 0 ? 'var(--amber)' : 'inherit', fontWeight: (s.pending_balance || 0) > 0 ? 700 : 400 }}>
-                      ₹{s.pending_balance || 0}
+                    <td style={{ padding: '10px 12px' }}>
+                      {(s.pending_balance || 0) > 0 ? (
+                        <div>
+                          <span className="pill pill-amber" style={{ fontWeight: 700, fontSize: 12 }}>
+                            ⏳ ₹{s.pending_balance} Pending
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="pill pill-green" style={{ fontSize: 11 }}>
+                          ✅ Fully Cleared
+                        </span>
+                      )}
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       <div className="flex gap-4" style={{ justifyContent: 'flex-end' }}>
@@ -567,13 +577,17 @@ export default function Suppliers() {
               {purchaseForm.total_amount && (
                 <div style={{ background: 'var(--bg)', padding: '10px 14px', borderRadius: 8, marginBottom: 14, border: '1px solid var(--border)' }}>
                   <div className="flex between">
-                    <span className="muted" style={{ fontSize: 13 }}>Remaining Pending Balance:</span>
+                    <span className="muted" style={{ fontSize: 13 }}>Remaining Pending Balance for this Bill:</span>
                     <strong style={{ color: (Number(purchaseForm.total_amount || 0) - Number(purchaseForm.paid_amount || 0)) > 0 ? 'var(--amber)' : 'var(--green)' }}>
                       ₹{Math.max(0, Number(purchaseForm.total_amount || 0) - Number(purchaseForm.paid_amount || 0))}
                     </strong>
                   </div>
                 </div>
               )}
+
+              <p className="muted" style={{ fontSize: 12, marginTop: -4, marginBottom: 12 }}>
+                💡 <strong>How Bills Work:</strong> When a supplier gives a bill, enter the total amount here. If you pay now or settle an earlier bill, enter that amount in <em>Amount Paid Now</em>. Unpaid balances stay in <em>Pending Balance</em> until you click <strong>💵 Pay</strong> to clear it!
+              </p>
 
               <div className="field">
                 <label>Payment Method (for Paid Amount)</label>
@@ -668,6 +682,28 @@ export default function Suppliers() {
                   onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value })}
                   placeholder={`Max ₹${activeSupplier.pending_balance || 0}`}
                 />
+                
+                {/* Settlement Quick Presets */}
+                {(activeSupplier.pending_balance || 0) > 0 && (
+                  <div className="flex gap-8 mt-8 wrap">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: 11, padding: '4px 8px' }}
+                      onClick={() => setPaymentForm({ ...paymentForm, amount: String(activeSupplier.pending_balance) })}
+                    >
+                      💰 Full Clear (₹{activeSupplier.pending_balance})
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      style={{ fontSize: 11, padding: '4px 8px' }}
+                      onClick={() => setPaymentForm({ ...paymentForm, amount: String(Math.round(activeSupplier.pending_balance / 2)) })}
+                    >
+                      🌗 Pay 50% (₹{Math.round(activeSupplier.pending_balance / 2)})
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="field">
@@ -770,7 +806,7 @@ export default function Suppliers() {
               </div>
             </div>
 
-            <h4>Purchases History</h4>
+            <h4>Purchases History & Bill Status</h4>
             <div className="table-responsive" style={{ overflowX: 'auto', marginBottom: 20 }}>
               <table className="table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -779,7 +815,7 @@ export default function Suppliers() {
                     <th style={{ padding: '8px 10px' }}>Items / Details</th>
                     <th style={{ padding: '8px 10px' }}>Total Amount</th>
                     <th style={{ padding: '8px 10px' }}>Initial Paid</th>
-                    <th style={{ padding: '8px 10px' }}>Pending</th>
+                    <th style={{ padding: '8px 10px' }}>Bill Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -794,7 +830,15 @@ export default function Suppliers() {
                       </td>
                       <td style={{ padding: '8px 10px', fontWeight: 600 }}>₹{p.total_amount}</td>
                       <td style={{ padding: '8px 10px', color: 'var(--green)' }}>₹{p.paid_amount} ({p.payment_method})</td>
-                      <td style={{ padding: '8px 10px', color: p.pending_amount > 0 ? 'var(--amber)' : 'inherit' }}>₹{p.pending_amount}</td>
+                      <td style={{ padding: '8px 10px' }}>
+                        {p.pending_amount === 0 ? (
+                          <span className="pill pill-green" style={{ fontSize: 10 }}>✅ Cleared</span>
+                        ) : (
+                          <span className="pill pill-amber" style={{ fontSize: 10, fontWeight: 700 }}>
+                            ⏳ Pending ₹{p.pending_amount}
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
