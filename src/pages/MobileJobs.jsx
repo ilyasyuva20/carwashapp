@@ -37,6 +37,7 @@ export default function MobileJobs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [completingId, setCompletingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const fetchRunningJobs = useCallback(async () => {
     try {
@@ -66,6 +67,19 @@ export default function MobileJobs() {
       alert('Failed to complete job: ' + err.message);
     } finally {
       setCompletingId(null);
+    }
+  }
+
+  async function handleDeleteJob(jobId, regNumber) {
+    if (!window.confirm(`Are you sure you want to delete active wash job for ${regNumber || 'this vehicle'}?`)) return;
+    setDeletingId(jobId);
+    try {
+      await api.del(`/jobs/${jobId}`);
+      await fetchRunningJobs();
+    } catch (err) {
+      alert('Failed to delete job: ' + (err.message || 'Unknown error'));
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -175,25 +189,50 @@ export default function MobileJobs() {
                     )}
                   </div>
 
-                  {/* One-Tap Complete Action */}
-                  <div className="mobile-job-footer">
+                  {/* Job Actions (Delete & Complete) */}
+                  <div className="mobile-job-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                     <div className="job-price-display">₹{price}</div>
-                    <button
-                      type="button"
-                      className="mobile-btn-complete"
-                      disabled={completingId === job.id}
-                      onClick={() => handleMarkComplete(job.id)}
-                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                    >
-                      {completingId === job.id ? (
-                        <>
-                          <span className="btn-spinner-sm" />
-                          <span>Completing...</span>
-                        </>
-                      ) : (
-                        '✓ Complete Wash'
-                      )}
-                    </button>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className="mobile-btn-delete"
+                        disabled={deletingId === job.id || completingId === job.id}
+                        onClick={() => handleDeleteJob(job.id, regNumber)}
+                        style={{
+                          background: '#fff1f2',
+                          color: '#e11d48',
+                          border: '1px solid #fecdd3',
+                          borderRadius: 8,
+                          padding: '8px 12px',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4
+                        }}
+                        title="Delete active wash job"
+                      >
+                        {deletingId === job.id ? 'Deleting...' : '🗑️ Delete'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="mobile-btn-complete"
+                        disabled={completingId === job.id || deletingId === job.id}
+                        onClick={() => handleMarkComplete(job.id)}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                      >
+                        {completingId === job.id ? (
+                          <>
+                            <span className="btn-spinner-sm" />
+                            <span>Completing...</span>
+                          </>
+                        ) : (
+                          '✓ Complete Wash'
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

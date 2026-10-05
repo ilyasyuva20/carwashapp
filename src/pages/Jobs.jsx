@@ -87,6 +87,16 @@ export default function Jobs() {
   }
   useEffect(() => { load(); }, []);
 
+  async function deleteJob(id, reg) {
+    if (!window.confirm(`Are you sure you want to delete job for ${reg || 'this vehicle'}?`)) return;
+    try {
+      await api.del(`/jobs/${id}`);
+      load();
+    } catch (err) {
+      alert('Failed to delete job: ' + (err.message || 'Unknown error'));
+    }
+  }
+
   // Compute status counts for badges
   const statusCounts = jobs.reduce((acc, j) => {
     // 1. Date filter (if selected)
@@ -511,6 +521,21 @@ export default function Jobs() {
                             Cancelled
                           </span>
                         )}
+                        <button
+                          className="btn btn-outline"
+                          onClick={() => deleteJob(j.id, j.vehicle?.reg_number)}
+                          style={{
+                            padding: '5px 7px',
+                            fontSize: 12,
+                            borderColor: '#fecdd3',
+                            color: '#e11d48',
+                            background: '#fff1f2',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title="Delete active or past job permanently"
+                        >
+                          🗑️
+                        </button>
                       </div>
                     </td>
                   </tr>
