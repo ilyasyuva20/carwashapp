@@ -14,8 +14,6 @@ export default function Attendance() {
   const [attendance, setAttendance] = useState([]);
   const [editingCin, setEditingCin] = useState(null); // { empId, check_in }
   const [editingCout, setEditingCout] = useState(null); // { empId, check_out }
-  const [editingLate, setEditingLate] = useState(null); // { empId, late_minutes }
-  const [editingOt, setEditingOt] = useState(null); // { empId, overtime_minutes }
 
   async function load() {
     try {
@@ -67,20 +65,6 @@ export default function Attendance() {
     load();
   }
 
-  async function updateLate(empId, mins) {
-    const val = Math.max(0, Number(mins) || 0);
-    await api.post('/attendance/update', { employee_id: empId, date, late_minutes: val });
-    setEditingLate(null);
-    load();
-  }
-
-  async function updateOt(empId, mins) {
-    const val = Math.max(0, Number(mins) || 0);
-    await api.post('/attendance/update', { employee_id: empId, date, overtime_minutes: val });
-    setEditingOt(null);
-    load();
-  }
-
   return (
     <div>
       <div className="page-header" style={{ marginBottom: 16 }}>
@@ -128,7 +112,7 @@ export default function Attendance() {
                     <div className="muted" style={{ fontSize: 12 }}>{e.role || 'Washer'}</div>
                   </td>
 
-                  {/* Check In Column */}
+                  {/* Check In Column - EDITABLE */}
                   <td style={{ padding: '14px 16px' }}>
                     {editingCin?.empId === e.id ? (
                       <div className="flex gap-4 center">
@@ -184,7 +168,7 @@ export default function Attendance() {
                     )}
                   </td>
 
-                  {/* Check Out Column */}
+                  {/* Check Out Column - EDITABLE */}
                   <td style={{ padding: '14px 16px' }}>
                     {editingCout?.empId === e.id ? (
                       <div className="flex gap-4 center">
@@ -229,110 +213,27 @@ export default function Attendance() {
                     )}
                   </td>
 
-                  {/* Late Minutes Column */}
+                  {/* Late Minutes Column - AUTOMATIC (READ ONLY, COMPUTED FROM CHECK IN) */}
                   <td style={{ padding: '14px 16px' }}>
-                    {editingLate?.empId === e.id ? (
-                      <div className="flex gap-4 center">
-                        <input
-                          type="number"
-                          style={{ width: 65, padding: '4px 6px', fontSize: 13 }}
-                          value={editingLate.late_minutes}
-                          onChange={ev => setEditingLate({ ...editingLate, late_minutes: ev.target.value })}
-                          autoFocus
-                        />
-                        <button
-                          className="btn btn-primary"
-                          style={{ padding: '3px 8px', fontSize: 11 }}
-                          onClick={() => updateLate(e.id, editingLate.late_minutes)}
-                        >
-                          ✓
-                        </button>
-                        <button
-                          className="btn btn-outline"
-                          style={{ padding: '3px 8px', fontSize: 11 }}
-                          onClick={() => setEditingLate(null)}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-8 center" style={{ flexWrap: 'wrap' }}>
-                        <span
-                          style={{
-                            fontWeight: 700,
-                            color: lateMins > 0 ? '#e11d48' : 'var(--muted)',
-                            background: lateMins > 0 ? '#ffe4e6' : 'transparent',
-                            padding: lateMins > 0 ? '2px 8px' : '0',
-                            borderRadius: 6,
-                            fontSize: 13
-                          }}
-                        >
-                          {lateMins > 0 ? `${lateMins}m (${lateHrs}h)` : '0m'}
-                        </span>
-                        <div className="flex gap-4">
-                          <button
-                            type="button"
-                            className="btn btn-outline"
-                            style={{ fontSize: 10, padding: '2px 6px', background: '#f1f5f9' }}
-                            title="Set 1 Hour Late (60 mins)"
-                            onClick={() => updateLate(e.id, 60)}
-                          >
-                            +1h
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-outline"
-                            style={{ fontSize: 10, padding: '2px 6px', background: '#f1f5f9' }}
-                            onClick={() => setEditingLate({ empId: e.id, late_minutes: lateMins })}
-                          >
-                            ✏️ Edit
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        color: lateMins > 0 ? '#e11d48' : 'var(--muted)',
+                        background: lateMins > 0 ? '#ffe4e6' : 'transparent',
+                        padding: lateMins > 0 ? '4px 10px' : '0',
+                        borderRadius: 6,
+                        fontSize: 13
+                      }}
+                    >
+                      {lateMins > 0 ? `${lateMins}m (${lateHrs}h)` : '0m'}
+                    </span>
                   </td>
 
-                  {/* Overtime Minutes Column */}
+                  {/* Overtime Minutes Column - AUTOMATIC */}
                   <td style={{ padding: '14px 16px' }}>
-                    {editingOt?.empId === e.id ? (
-                      <div className="flex gap-4 center">
-                        <input
-                          type="number"
-                          style={{ width: 65, padding: '4px 6px', fontSize: 13 }}
-                          value={editingOt.overtime_minutes}
-                          onChange={ev => setEditingOt({ ...editingOt, overtime_minutes: ev.target.value })}
-                          autoFocus
-                        />
-                        <button
-                          className="btn btn-primary"
-                          style={{ padding: '3px 8px', fontSize: 11 }}
-                          onClick={() => updateOt(e.id, editingOt.overtime_minutes)}
-                        >
-                          ✓
-                        </button>
-                        <button
-                          className="btn btn-outline"
-                          style={{ padding: '3px 8px', fontSize: 11 }}
-                          onClick={() => setEditingOt(null)}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-8 center">
-                        <span style={{ fontWeight: 700, color: otMins > 0 ? '#16a34a' : 'var(--muted)' }}>
-                          {otMins}m
-                        </span>
-                        <button
-                          type="button"
-                          className="btn btn-outline"
-                          style={{ fontSize: 10, padding: '2px 6px', background: '#f1f5f9' }}
-                          onClick={() => setEditingOt({ empId: e.id, overtime_minutes: otMins })}
-                        >
-                          ✏️ Edit
-                        </button>
-                      </div>
-                    )}
+                    <span style={{ fontWeight: 700, color: otMins > 0 ? '#16a34a' : 'var(--muted)' }}>
+                      {otMins}m
+                    </span>
                   </td>
 
                   {/* Status Column */}
@@ -396,5 +297,6 @@ export default function Attendance() {
     </div>
   );
 }
+
 
 
