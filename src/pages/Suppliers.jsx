@@ -394,7 +394,27 @@ export default function Suppliers() {
       {showSupplierModal && (
         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card" style={{ width: '100%', maxWidth: 500, maxHeight: '90vh', overflowY: 'auto' }}>
-            <h3 style={{ marginTop: 0 }}>{editingSupplier ? 'Edit Supplier' : 'Add New Supplier'}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h3 style={{ margin: 0 }}>{editingSupplier ? 'Edit Supplier' : 'Add New Supplier'}</h3>
+              <button
+                type="button"
+                onClick={() => setShowSupplierModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: 22,
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  color: 'var(--muted)',
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  lineHeight: 1
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
             <form onSubmit={saveSupplier}>
               <div className="field">
                 <label>Supplier Name / Shop Name *</label>
@@ -486,7 +506,27 @@ export default function Suppliers() {
       {showPurchaseModal && activeSupplier && (
         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card" style={{ width: '100%', maxWidth: 480 }}>
-            <h3 style={{ marginTop: 0 }}>🛒 Record Product Purchase</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <h3 style={{ margin: 0 }}>🛒 Record Product Purchase</h3>
+              <button
+                type="button"
+                onClick={() => setShowPurchaseModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: 22,
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  color: 'var(--muted)',
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  lineHeight: 1
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
             <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>
               Supplier: <strong>{activeSupplier.name}</strong> ({activeSupplier.category})
             </p>
@@ -593,7 +633,27 @@ export default function Suppliers() {
       {showPaymentModal && activeSupplier && (
         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card" style={{ width: '100%', maxWidth: 440 }}>
-            <h3 style={{ marginTop: 0 }}>💵 Pay Supplier Balance</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <h3 style={{ margin: 0 }}>💵 Pay Supplier Balance</h3>
+              <button
+                type="button"
+                onClick={() => setShowPaymentModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: 22,
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  color: 'var(--muted)',
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  lineHeight: 1
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
             <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>
               Supplier: <strong>{activeSupplier.name}</strong> · Current Pending: <strong style={{ color: 'var(--amber)' }}>₹{activeSupplier.pending_balance || 0}</strong>
             </p>
@@ -670,7 +730,24 @@ export default function Suppliers() {
           <div className="card" style={{ width: '100%', maxWidth: 700, maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="flex between center">
               <h3 style={{ margin: 0 }}>📋 Supplier Ledger: {ledgerDetails.name}</h3>
-              <button className="btn btn-outline" onClick={() => setShowLedgerModal(false)}>✕ Close</button>
+              <button
+                type="button"
+                onClick={() => setShowLedgerModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: 22,
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  color: 'var(--muted)',
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  lineHeight: 1
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
             </div>
             <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
               {ledgerDetails.company_name} · {ledgerDetails.category} · Contact: {ledgerDetails.contact_number || '-'}

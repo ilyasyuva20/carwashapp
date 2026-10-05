@@ -557,7 +557,27 @@ export default function Subscriptions() {
       {showSubModal && (
         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card" style={{ width: '100%', maxWidth: 640, maxHeight: '92vh', overflowY: 'auto' }}>
-            <h3 style={{ marginTop: 0 }}>Add Customer Monthly Package</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h3 style={{ margin: 0 }}>Add Customer Monthly Package</h3>
+              <button
+                type="button"
+                onClick={() => setShowSubModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: 22,
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  color: 'var(--muted)',
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  lineHeight: 1
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
 
             {/* Mode Switcher Tabs */}
             <div className="status-tab-group mb-16" style={{ width: '100%', display: 'flex' }}>
@@ -1083,7 +1103,27 @@ export default function Subscriptions() {
       {showRenewModal && activeSub && (
         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card" style={{ width: '100%', maxWidth: 440 }}>
-            <h3 style={{ marginTop: 0 }}>🔄 Renew Monthly Package</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <h3 style={{ margin: 0 }}>🔄 Renew Monthly Package</h3>
+              <button
+                type="button"
+                onClick={() => setShowRenewModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: 22,
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  color: 'var(--muted)',
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  lineHeight: 1
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
             <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>
               Customer: <strong>{activeSub.customer?.name}</strong> ({activeSub.plan_name})
             </p>
