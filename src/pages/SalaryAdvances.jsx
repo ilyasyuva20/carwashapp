@@ -13,6 +13,7 @@ export default function SalaryAdvances() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [employees, setEmployees] = useState([]);
   const [advancesMap, setAdvancesMap] = useState({});
+  const [payrollMap, setPayrollMap] = useState({});
   const [search, setSearch] = useState('');
   const [selectedEmpAdvance, setSelectedEmpAdvance] = useState(null);
   const [selectedEmpDetails, setSelectedEmpDetails] = useState(null);
@@ -25,14 +26,27 @@ export default function SalaryAdvances() {
     setLoading(true);
     try {
       const emps = await api.get('/employees');
-      setEmployees(emps);
+      setEmployees(emps || []);
 
-      const map = {};
-      for (const emp of emps) {
+      const advMap = {};
+      const payMap = {};
+
+      for (const emp of (emps || [])) {
+        // Fetch advances history
         const advs = await api.get(`/employees/${emp.id}/advances`);
-        map[emp.id] = advs || [];
+        advMap[emp.id] = advs || [];
+
+        // Fetch payroll calculation preview
+        try {
+          const preview = await api.get(`/payroll/preview?employee_id=${emp.id}&month=${selectedMonth}&year=${selectedYear}`);
+          payMap[emp.id] = preview;
+        } catch (e) {
+          console.error('Failed to preview payroll for emp', emp.id, e);
+        }
       }
-      setAdvancesMap(map);
+
+      setAdvancesMap(advMap);
+      setPayrollMap(payMap);
     } catch (err) {
       console.error(err);
     } finally {
@@ -42,7 +56,7 @@ export default function SalaryAdvances() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedMonth, selectedYear]);
 
   const filteredEmployees = employees.filter(e => {
     const q = search.toLowerCase().trim();
@@ -54,18 +68,31 @@ export default function SalaryAdvances() {
     );
   });
 
-  // Calculate month totals
+  // Calculate overall summary totals
   let totalMonthlySalary = 0;
   let totalSelectedMonthAdvances = 0;
+  let totalLeaveDeductions = 0;
+  let totalLateDeductions = 0;
+  let totalNetPayable = 0;
 
   employees.forEach(emp => {
-    totalMonthlySalary += Number(emp.salary_monthly) || 0;
-    const empAdvs = advancesMap[emp.id] || [];
-    const monthAdvs = empAdvs.filter(a => (a.date || '').startsWith(selectedMonthPrefix));
-    totalSelectedMonthAdvances += monthAdvs.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
-  });
+    const base = Number(emp.salary_monthly) || 0;
+    totalMonthlySalary += base;
 
-  const totalBalancePayable = Math.max(0, totalMonthlySalary - totalSelectedMonthAdvances);
+    const pay = payrollMap[emp.id];
+    if (pay) {
+      totalLeaveDeductions += Number(pay.leave_deduction) || 0;
+      totalLateDeductions += Number(pay.late_deduction) || 0;
+      totalSelectedMonthAdvances += Number(pay.advance_deduction) || 0;
+      totalNetPayable += Number(pay.net_pay) || 0;
+    } else {
+      const empAdvs = advancesMap[emp.id] || [];
+      const monthAdvs = empAdvs.filter(a => (a.date || '').startsWith(selectedMonthPrefix));
+      const advTotal = monthAdvs.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+      totalSelectedMonthAdvances += advTotal;
+      totalNetPayable += Math.max(0, base - advTotal);
+    }
+  });
 
   return (
     <div>
@@ -74,7 +101,7 @@ export default function SalaryAdvances() {
         <div>
           <h1 style={{ margin: 0 }}>💵 Salary & Advances</h1>
           <p className="muted" style={{ margin: '4px 0 0 0', fontSize: 14 }}>
-            Monthly salary expenses and advance payouts for <strong>{selectedMonthLabel}</strong>.
+            Salary calculation divided by 30 days (₹600/day @ ₹18k) & 8 hrs shift, with leave and late deductions for <strong>{selectedMonthLabel}</strong>.
           </p>
         </div>
 
@@ -127,21 +154,33 @@ export default function SalaryAdvances() {
       </div>
 
       {/* Overview Stat Cards */}
-      <div className="grid grid-3" style={{ marginBottom: 20, gap: 16 }}>
+      <div className="grid grid-4" style={{ marginBottom: 20, gap: 16 }}>
         <div className="card" style={{ padding: 16, borderLeft: '4px solid var(--teal)' }}>
           <div className="muted" style={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>
-            Total Monthly Salary Budget
+            Base Monthly Budget
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>
             ₹{totalMonthlySalary.toLocaleString()}
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 16, borderLeft: '4px solid #f59e0b' }}>
+          <div className="muted" style={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>
+            Leave & Late Deductions
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#d97706', marginTop: 4 }}>
+            - ₹{(totalLeaveDeductions + totalLateDeductions).toLocaleString()}
+          </div>
+          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+            Leaves: ₹{totalLeaveDeductions} · Late: ₹{totalLateDeductions}
           </div>
         </div>
 
         <div className="card" style={{ padding: 16, borderLeft: '4px solid #e11d48' }}>
           <div className="muted" style={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>
-            Advances ({MONTH_NAMES[selectedMonth - 1]})
+            Advances Issued
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#e11d48', marginTop: 4 }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#e11d48', marginTop: 4 }}>
             - ₹{totalSelectedMonthAdvances.toLocaleString()}
           </div>
         </div>
@@ -150,8 +189,8 @@ export default function SalaryAdvances() {
           <div className="muted" style={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>
             Net Payable ({MONTH_NAMES[selectedMonth - 1]})
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#16a34a', marginTop: 4 }}>
-            ₹{totalBalancePayable.toLocaleString()}
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#16a34a', marginTop: 4 }}>
+            ₹{totalNetPayable.toLocaleString()}
           </div>
         </div>
       </div>
@@ -159,7 +198,7 @@ export default function SalaryAdvances() {
       {/* Salary & Advances List Table */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (
-          <p className="muted" style={{ padding: 20, margin: 0, textAlign: 'center' }}>Loading salary records...</p>
+          <p className="muted" style={{ padding: 20, margin: 0, textAlign: 'center' }}>Calculating payroll records...</p>
         ) : filteredEmployees.length === 0 ? (
           <p className="muted" style={{ padding: 20, margin: 0, textAlign: 'center' }}>No employees found.</p>
         ) : (
@@ -167,19 +206,26 @@ export default function SalaryAdvances() {
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '2px solid var(--border)', fontSize: 13 }}>
                 <th style={{ padding: '12px 16px' }}>Employee</th>
-                <th style={{ padding: '12px 16px' }}>Monthly Salary</th>
+                <th style={{ padding: '12px 16px' }}>Base Salary</th>
+                <th style={{ padding: '12px 16px' }}>Daily Rate (30d/8h)</th>
+                <th style={{ padding: '12px 16px' }}>Leave Deductions</th>
+                <th style={{ padding: '12px 16px' }}>Late Deductions</th>
                 <th style={{ padding: '12px 16px' }}>Advance ({MONTH_NAMES[selectedMonth - 1]})</th>
-                <th style={{ padding: '12px 16px' }}>Balance Salary</th>
+                <th style={{ padding: '12px 16px' }}>Net Payable</th>
                 <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredEmployees.map(emp => {
-                const advs = advancesMap[emp.id] || [];
-                const monthAdvs = advs.filter(a => (a.date || '').startsWith(selectedMonthPrefix));
-                const monthAdvanceTotal = monthAdvs.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
-                const salary = Number(emp.salary_monthly) || 0;
-                const balance = Math.max(0, salary - monthAdvanceTotal);
+                const pay = payrollMap[emp.id] || {};
+                const base = Number(emp.salary_monthly) || 0;
+                const perDay = pay.per_day_salary || Math.round(base / 30);
+                const hourly = pay.hourly_rate || Math.round((base / 30) / 8);
+
+                const leaveDed = pay.leave_deduction || 0;
+                const lateDed = pay.late_deduction || 0;
+                const advDed = pay.advance_deduction || 0;
+                const netPay = pay.net_pay !== undefined ? pay.net_pay : Math.max(0, base - advDed);
 
                 return (
                   <tr key={emp.id} style={{ borderBottom: '1px solid var(--border)', fontSize: 14 }}>
@@ -189,12 +235,24 @@ export default function SalaryAdvances() {
                         {emp.role || 'Washer'} · 📞 {emp.phone || '-'}
                       </div>
                     </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 600 }}>₹{salary}</td>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: monthAdvanceTotal > 0 ? '#e11d48' : 'var(--muted)' }}>
-                      {monthAdvanceTotal > 0 ? `- ₹${monthAdvanceTotal}` : '₹0'}
+                    <td style={{ padding: '14px 16px', fontWeight: 600 }}>₹{base.toLocaleString()}</td>
+                    <td style={{ padding: '14px 16px' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--teal-dark)' }}>₹{perDay}/day</div>
+                      <div className="muted" style={{ fontSize: 11 }}>₹{hourly}/hr (8h shift)</div>
                     </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#16a34a' }}>
-                      ₹{balance}
+                    <td style={{ padding: '14px 16px', fontWeight: 600, color: leaveDed > 0 ? '#d97706' : 'var(--muted)' }}>
+                      {leaveDed > 0 ? `- ₹${leaveDed}` : '₹0'}
+                      {pay.leave_days > 0 && <div className="muted" style={{ fontSize: 11 }}>({pay.leave_days} full, {pay.half_days || 0} half)</div>}
+                    </td>
+                    <td style={{ padding: '14px 16px', fontWeight: 600, color: lateDed > 0 ? '#e11d48' : 'var(--muted)' }}>
+                      {lateDed > 0 ? `- ₹${lateDed}` : '₹0'}
+                      {pay.total_late_minutes > 0 && <div className="muted" style={{ fontSize: 11 }}>({pay.total_late_minutes} mins late)</div>}
+                    </td>
+                    <td style={{ padding: '14px 16px', fontWeight: 700, color: advDed > 0 ? '#e11d48' : 'var(--muted)' }}>
+                      {advDed > 0 ? `- ₹${advDed}` : '₹0'}
+                    </td>
+                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#16a34a', fontSize: 15 }}>
+                      ₹{netPay.toLocaleString()}
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                       <div className="flex gap-8" style={{ justifyContent: 'flex-end' }}>
@@ -238,6 +296,7 @@ export default function SalaryAdvances() {
       {selectedEmpDetails && (
         <SalaryBreakdownModal
           employee={selectedEmpDetails}
+          payroll={payrollMap[selectedEmpDetails.id]}
           advances={advancesMap[selectedEmpDetails.id] || []}
           selectedMonthPrefix={selectedMonthPrefix}
           selectedMonthLabel={selectedMonthLabel}
@@ -346,53 +405,119 @@ function AdvanceModal({ employee, onClose, onDone }) {
   );
 }
 
-function SalaryBreakdownModal({ employee, advances, selectedMonthPrefix, selectedMonthLabel, onClose, onGiveAdvance }) {
+function SalaryBreakdownModal({ employee, payroll, advances, selectedMonthPrefix, selectedMonthLabel, onClose, onGiveAdvance }) {
   const emp = employee;
-  const monthlySalary = Number(emp.salary_monthly) || 0;
-  
-  const selectedMonthAdvs = advances.filter(a => (a.date || '').startsWith(selectedMonthPrefix));
-  const totalSelectedMonthAdvance = selectedMonthAdvs.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
-  const totalAllAdvance = advances.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
-  const balanceSalary = Math.max(0, monthlySalary - totalSelectedMonthAdvance);
+  const pay = payroll || {};
 
+  const baseSalary = Number(emp.salary_monthly) || 0;
+  const perDaySalary = pay.per_day_salary || (baseSalary / 30);
+  const hourlyRate = pay.hourly_rate || (perDaySalary / 8);
+  const perMinuteRate = hourlyRate / 60;
+
+  const leaveDays = pay.leave_days || 0;
+  const halfDays = pay.half_days || 0;
+  const leaveDeduction = pay.leave_deduction || 0;
+
+  const totalLateMinutes = pay.total_late_minutes || 0;
+  const lateDeduction = pay.late_deduction || 0;
+
+  const totalOvertimeMinutes = pay.total_overtime_minutes || 0;
+  const overtimePay = pay.overtime_pay || 0;
+
+  const advanceDeduction = pay.advance_deduction || 0;
+  const netPay = pay.net_pay !== undefined ? pay.net_pay : Math.max(0, baseSalary - leaveDeduction - lateDeduction + overtimePay - advanceDeduction);
+
+  const selectedMonthAdvs = advances.filter(a => (a.date || '').startsWith(selectedMonthPrefix));
   const [filterView, setFilterView] = useState('selected'); // 'selected' or 'all'
 
   const displayedAdvances = filterView === 'selected' ? selectedMonthAdvs : advances;
 
   return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 580, padding: 20 }}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 620, padding: 22, maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="flex between center" style={{ marginBottom: 14 }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 19 }}>📊 Salary Details — {emp.name}</h2>
-            <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-              Target Period: <strong>{selectedMonthLabel}</strong>
+            <h2 style={{ margin: 0, fontSize: 20 }}>📊 Salary Calculation — {emp.name}</h2>
+            <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+              Period: <strong>{selectedMonthLabel}</strong> · Role: <strong>{emp.role || 'Washer'}</strong>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--muted)' }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: 'var(--muted)' }}>
             ✕
           </button>
         </div>
 
-        {/* Salary Summary Card */}
-        <div style={{ background: '#f8fafc', padding: 14, borderRadius: 12, marginBottom: 14, border: '1px solid var(--border)' }}>
-          <div className="muted" style={{ fontSize: 12 }}>
-            Role: <strong>{emp.role || 'Washer'}</strong> · Phone: <strong>{emp.phone || '-'}</strong>
+        {/* Calculation Formula Standard Banner */}
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#1e40af' }}>
+          💡 <strong>Calculation Standard:</strong> Monthly Salary / 30 Days = <strong>₹{perDaySalary.toFixed(2)}/day</strong>.
+          <br />
+          8-Hour Duty Shift = <strong>₹{hourlyRate.toFixed(2)}/hour</strong> (₹{perMinuteRate.toFixed(2)}/minute).
+        </div>
+
+        {/* Itemized Calculation Summary Card */}
+        <div style={{ background: '#f8fafc', padding: 16, borderRadius: 12, marginBottom: 16, border: '1px solid var(--border)' }}>
+          <h3 style={{ margin: '0 0 10px 0', fontSize: 15, color: 'var(--foreground)' }}>📋 Detailed Salary Statement</h3>
+
+          <div className="flex between center" style={{ padding: '6px 0', borderBottom: '1px dashed var(--border)' }}>
+            <span style={{ fontSize: 13, color: 'var(--foreground)' }}>Monthly Base Salary</span>
+            <strong style={{ fontSize: 14 }}>₹{baseSalary.toLocaleString()}</strong>
           </div>
 
-          <div className="grid grid-3" style={{ marginTop: 10, background: '#ffffff', padding: 10, borderRadius: 8, border: '1px solid var(--border)', textAlign: 'center' }}>
+          <div className="flex between center" style={{ padding: '6px 0', borderBottom: '1px dashed var(--border)' }}>
             <div>
-              <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Monthly Base</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--foreground)', marginTop: 2 }}>₹{monthlySalary}</div>
+              <span style={{ fontSize: 13, color: leaveDays > 0 || halfDays > 0 ? '#d97706' : 'var(--muted)' }}>
+                Leave Deductions
+              </span>
+              <div className="muted" style={{ fontSize: 11 }}>
+                {leaveDays} Full Days (₹{perDaySalary * leaveDays}) + {halfDays} Half Days (₹{(perDaySalary / 2) * halfDays})
+              </div>
             </div>
+            <strong style={{ fontSize: 14, color: leaveDeduction > 0 ? '#d97706' : 'var(--muted)' }}>
+              - ₹{leaveDeduction.toLocaleString()}
+            </strong>
+          </div>
+
+          <div className="flex between center" style={{ padding: '6px 0', borderBottom: '1px dashed var(--border)' }}>
             <div>
-              <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Advance ({selectedMonthLabel})</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#e11d48', marginTop: 2 }}>- ₹{totalSelectedMonthAdvance}</div>
+              <span style={{ fontSize: 13, color: totalLateMinutes > 0 ? '#e11d48' : 'var(--muted)' }}>
+                Late Arrival Deductions
+              </span>
+              <div className="muted" style={{ fontSize: 11 }}>
+                Total Late: {totalLateMinutes} Mins ({(totalLateMinutes / 60).toFixed(1)} Hours) @ ₹{perMinuteRate.toFixed(2)}/min
+              </div>
             </div>
+            <strong style={{ fontSize: 14, color: lateDeduction > 0 ? '#e11d48' : 'var(--muted)' }}>
+              - ₹{lateDeduction.toLocaleString()}
+            </strong>
+          </div>
+
+          {totalOvertimeMinutes > 0 && (
+            <div className="flex between center" style={{ padding: '6px 0', borderBottom: '1px dashed var(--border)' }}>
+              <div>
+                <span style={{ fontSize: 13, color: '#16a34a' }}>Overtime Allowance</span>
+                <div className="muted" style={{ fontSize: 11 }}>{totalOvertimeMinutes} Mins OT (1.5x rate)</div>
+              </div>
+              <strong style={{ fontSize: 14, color: '#16a34a' }}>+ ₹{overtimePay.toLocaleString()}</strong>
+            </div>
+          )}
+
+          <div className="flex between center" style={{ padding: '6px 0', borderBottom: '1px dashed var(--border)' }}>
             <div>
-              <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Balance Payable</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#16a34a', marginTop: 2 }}>₹{balanceSalary}</div>
+              <span style={{ fontSize: 13, color: advanceDeduction > 0 ? '#e11d48' : 'var(--muted)' }}>
+                Advances Deducted
+              </span>
+              <div className="muted" style={{ fontSize: 11 }}>Issued during {selectedMonthLabel}</div>
             </div>
+            <strong style={{ fontSize: 14, color: advanceDeduction > 0 ? '#e11d48' : 'var(--muted)' }}>
+              - ₹{advanceDeduction.toLocaleString()}
+            </strong>
+          </div>
+
+          <div className="flex between center" style={{ paddingTop: 10, marginTop: 4 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--foreground)' }}>Net Payable Amount</span>
+            <strong style={{ fontSize: 20, fontWeight: 800, color: '#16a34a' }}>
+              ₹{netPay.toLocaleString()}
+            </strong>
           </div>
         </div>
 
@@ -400,7 +525,7 @@ function SalaryBreakdownModal({ employee, advances, selectedMonthPrefix, selecte
         <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
           <div className="flex between center" style={{ marginBottom: 10 }}>
             <h3 style={{ margin: 0, fontSize: 14, color: 'var(--teal-dark)' }}>💰 Advances History</h3>
-            
+
             <div className="flex gap-8 center">
               <button
                 type="button"
@@ -430,7 +555,7 @@ function SalaryBreakdownModal({ employee, advances, selectedMonthPrefix, selecte
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid var(--border)', background: '#f1f5f9' }}>
-                    <th style={{ padding: '6px 8px' }}>Date & Exact Time</th>
+                    <th style={{ padding: '6px 8px' }}>Date</th>
                     <th style={{ padding: '6px 8px' }}>Amount</th>
                     <th style={{ padding: '6px 8px' }}>Method</th>
                     <th style={{ padding: '6px 8px' }}>Note</th>
@@ -440,7 +565,7 @@ function SalaryBreakdownModal({ employee, advances, selectedMonthPrefix, selecte
                   {displayedAdvances.map(a => (
                     <tr key={a.id} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', fontWeight: 600, color: 'var(--teal-dark)' }}>
-                        {a.date && a.date.length <= 10 ? `${a.date} 12:00 PM` : a.date}
+                        {a.date}
                       </td>
                       <td style={{ padding: '6px 8px', fontWeight: 700, color: '#e11d48' }}>₹{a.amount}</td>
                       <td style={{ padding: '6px 8px' }}>
@@ -470,3 +595,4 @@ function SalaryBreakdownModal({ employee, advances, selectedMonthPrefix, selecte
     document.body
   );
 }
+
