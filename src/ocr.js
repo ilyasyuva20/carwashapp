@@ -398,3 +398,106 @@ export async function recognizePlateNumber(imageSource) {
     throw err;
   }
 }
+
+/**
+ * Scans a supplier invoice / bill image using AI Vision OCR API and extracts
+ * Supplier Name, Invoice Number, Invoice Date, Line Items, Total Amount, and Balance.
+ */
+export async function recognizeInvoice(imageSource) {
+  let base64Image = '';
+  try {
+    const img = new Image();
+    await new Promise((res, rej) => {
+      if (typeof imageSource === 'string') {
+        if (imageSource.startsWith('data:image/')) {
+          base64Image = imageSource;
+          img.onload = res;
+          img.onerror = rej;
+          img.src = imageSource;
+        } else {
+          img.onload = res;
+          img.onerror = rej;
+          img.src = imageSource;
+        }
+      } else if (imageSource instanceof File || imageSource instanceof Blob) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          base64Image = e.target.result;
+          img.onload = res;
+          img.onerror = rej;
+          img.src = e.target.result;
+        };
+        reader.onerror = rej;
+        reader.readAsDataURL(imageSource);
+      } else {
+        res();
+      }
+    });
+
+    if (!base64Image && img.width > 0) {
+      base64Image = getImageBase64(img);
+    }
+
+    if (base64Image) {
+      try {
+        console.log('[INVOICE OCR] Requesting AI Vision Invoice Scanner...');
+        const apiResult = await api.post('/ocr/scan-invoice', { image: base64Image });
+        if (apiResult && apiResult.success && apiResult.invoice) {
+          console.log('[INVOICE OCR SUCCESS]', apiResult.invoice);
+          return apiResult.invoice;
+        }
+      } catch (apiErr) {
+        console.warn('[INVOICE OCR Server Warning]:', apiErr.message);
+      }
+    }
+  } catch (e) {
+    console.warn('[INVOICE OCR Base64 Error]:', e);
+  }
+
+  // Fallback Tesseract.js browser OCR
+  let worker = null;
+  try {
+    worker = await createWorker('eng');
+    const result = await worker.recognize(imageSource);
+    await worker.terminate();
+
+    const rawText = result.data.text || '';
+    console.log('[INVOICE OCR TESSERACT RAW]:', rawText);
+
+    const lines = rawText.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+    let supplierName = lines[0] || 'Scanned Supplier';
+    let totalAmt = 0;
+    const items = [];
+
+    lines.forEach(line => {
+      const match = line.match(/(?:₹|\b)(\d+(?:\.\d{2})?)\s*$/);
+      if (match) {
+        const amt = parseFloat(match[1]);
+        if (amt > 0 && !/total|tax|balance/i.test(line)) {
+          items.push({ name: line.replace(/(?:₹|\b)\d+(?:\.\d{2})?\s*$/, '').trim(), amount: amt });
+        }
+      }
+    });
+
+    const totalMatch = rawText.match(/(?:total|amount)[\s.:]*₹?\s*(\d+(?:\.\d{2})?)/i);
+    if (totalMatch) totalAmt = parseFloat(totalMatch[1]);
+    if (!totalAmt && items.length > 0) totalAmt = items.reduce((s, i) => s + i.amount, 0);
+
+    return {
+      supplier_name: supplierName,
+      invoice_number: '',
+      invoice_date: new Date().toISOString().slice(0, 10),
+      items,
+      total_amount: totalAmt,
+      paid_amount: 0,
+      balance_amount: 0,
+      raw_text: rawText
+    };
+  } catch (err) {
+    if (worker) {
+      try { await worker.terminate(); } catch (e) { /* ignore */ }
+    }
+    throw new Error('Invoice scanner could not read bill clearly. Please enter bill details manually.');
+  }
+}
+

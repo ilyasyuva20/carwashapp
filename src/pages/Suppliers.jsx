@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { api } from '../api';
+import { recognizeInvoice } from '../ocr';
 
 const SUPPLIER_CATEGORIES = [
   'Shampoo',
@@ -25,6 +26,11 @@ export default function Suppliers() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showLedgerModal, setShowLedgerModal] = useState(false);
   const [ledgerDetails, setLedgerDetails] = useState(null);
+
+  // AI Invoice Scanner state
+  const [scanningBill, setScanningBill] = useState(false);
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   // Forms state
   const [supplierForm, setSupplierForm] = useState({
@@ -70,6 +76,93 @@ export default function Suppliers() {
   useEffect(() => {
     loadSuppliers();
   }, []);
+
+  async function handleInvoiceUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    setScanningBill(true);
+
+    try {
+      const result = await recognizeInvoice(file);
+      const invoice = result.invoice || {};
+
+      if (!result.text || result.text.length < 5) {
+        alert('Could not clearly read text from this bill image. Please upload a clear photo or enter details manually.');
+        setScanningBill(false);
+        return;
+      }
+
+      // Match supplier or find/create best fit
+      let targetSupplier = null;
+      const extractedName = (invoice.supplierName || '').trim();
+
+      if (extractedName) {
+        const lowerName = extractedName.toLowerCase();
+        targetSupplier = suppliers.find(s =>
+          (s.name || '').toLowerCase().includes(lowerName) ||
+          lowerName.includes((s.name || '').toLowerCase()) ||
+          (s.company_name || '').toLowerCase().includes(lowerName) ||
+          lowerName.includes((s.company_name || '').toLowerCase())
+        );
+      }
+
+      if (!targetSupplier && extractedName) {
+        // Auto-create missing supplier
+        try {
+          const created = await api.post('/suppliers', {
+            name: extractedName,
+            company_name: extractedName,
+            category: 'Shampoo'
+          });
+          targetSupplier = created;
+          await loadSuppliers();
+        } catch (err) {
+          console.error('Failed auto-creating supplier:', err);
+        }
+      }
+
+      if (!targetSupplier && suppliers.length > 0) {
+        targetSupplier = suppliers[0];
+      }
+
+      // Format items detail string
+      let detailsText = '';
+      if (invoice.items && invoice.items.length > 0) {
+        detailsText = invoice.items.map(it => {
+          let line = it.name;
+          if (it.quantity) line += ` (Qty: ${it.quantity}${it.unit ? ' ' + it.unit : ''})`;
+          if (it.amount) line += ` - ₹${it.amount}`;
+          return line;
+        }).join('\n');
+      } else {
+        detailsText = 'Supplier Bill Purchase';
+      }
+
+      const total = invoice.totalAmount || 0;
+      const balance = (invoice.balanceAmount !== null && invoice.balanceAmount !== undefined) ? invoice.balanceAmount : 0;
+      const paid = total > 0 ? Math.max(0, total - balance) : 0;
+
+      setActiveSupplier(targetSupplier);
+      setPurchaseForm({
+        item_details: detailsText,
+        category: targetSupplier?.category || 'Shampoo',
+        total_amount: total ? String(total) : '',
+        paid_amount: paid ? String(paid) : '',
+        payment_method: 'cash',
+        date: invoice.date || new Date().toISOString().slice(0, 10),
+        note: invoice.invoiceNo ? `Bill #${invoice.invoiceNo}` : 'AI Bill Scan'
+      });
+
+      setShowPurchaseModal(true);
+    } catch (err) {
+      console.error('Invoice scan error:', err);
+      alert('Failed to scan invoice: ' + (err.message || 'Unknown error'));
+    } finally {
+      setScanningBill(false);
+      if (e.target) e.target.value = '';
+    }
+  }
 
   function openAddSupplier() {
     setEditingSupplier(null);
@@ -217,6 +310,36 @@ export default function Suppliers() {
 
   return (
     <div>
+      {/* Hidden File / Camera Inputs for Invoice Scanning */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*,.pdf"
+        style={{ display: 'none' }}
+        onChange={handleInvoiceUpload}
+      />
+      <input
+        type="file"
+        ref={cameraInputRef}
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={handleInvoiceUpload}
+      />
+
+      {/* AI Scanning Loading Overlay */}
+      {scanningBill && (
+        <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+          <div className="card text-center" style={{ width: '90%', maxWidth: 400, padding: 32, borderRadius: 16 }}>
+            <div style={{ fontSize: 42, marginBottom: 12, animation: 'pulse 1.5s infinite' }}>📸</div>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: 18, fontWeight: 700 }}>Scanning Supplier Bill with AI</h3>
+            <p className="muted" style={{ fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+              Automatically extracting items, quantities, rates, supplier name, date, total amount & pending balance...
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="page-header">
         <div>
@@ -226,9 +349,31 @@ export default function Suppliers() {
           </p>
         </div>
 
-        <button className="btn btn-primary" onClick={openAddSupplier}>
-          ➕ Add Supplier
-        </button>
+        <div className="flex gap-8 wrap">
+          <button
+            type="button"
+            className="btn btn-secondary flex center gap-4"
+            onClick={() => fileInputRef.current && fileInputRef.current.click()}
+            title="Upload invoice photo or PDF"
+            style={{ background: 'var(--card-bg, #1e293b)', color: '#38bdf8', border: '1px solid #38bdf8' }}
+          >
+            📄 Upload Bill Photo
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary flex center gap-4"
+            onClick={() => cameraInputRef.current && cameraInputRef.current.click()}
+            title="Scan bill with camera"
+            style={{ background: 'var(--card-bg, #1e293b)', color: '#a855f7', border: '1px solid #a855f7' }}
+          >
+            📸 Camera Scan
+          </button>
+
+          <button className="btn btn-primary" onClick={openAddSupplier}>
+            ➕ Add Supplier
+          </button>
+        </div>
       </div>
 
       {/* KPI Stats Bar */}
@@ -537,17 +682,33 @@ export default function Suppliers() {
                 ✕
               </button>
             </div>
-            <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>
-              Supplier: <strong>{activeSupplier.name}</strong> ({activeSupplier.category})
-            </p>
-
             <form onSubmit={submitPurchase}>
+              <div className="field mb-12">
+                <label>Select Supplier *</label>
+                <select
+                  value={activeSupplier?.id || ''}
+                  onChange={e => {
+                    const sel = suppliers.find(s => String(s.id) === e.target.value);
+                    if (sel) setActiveSupplier(sel);
+                  }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)' }}
+                >
+                  {suppliers.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.category})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="field">
-                <label>Item Description / Details</label>
-                <input
+                <label>Item Description / Details (Scanned / Entered Items)</label>
+                <textarea
+                  rows={4}
                   value={purchaseForm.item_details}
                   onChange={e => setPurchaseForm({ ...purchaseForm, item_details: e.target.value })}
-                  placeholder="e.g. Microfiber Cloth 50pcs / Shampoo 50L"
+                  placeholder="e.g. WAX SHAMPOO R60 (Qty: 30 Kg) - ₹3200&#10;DASH POLISH WB (Qty: 10 Kg) - ₹1200"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', fontFamily: 'inherit', resize: 'vertical' }}
                 />
               </div>
 
