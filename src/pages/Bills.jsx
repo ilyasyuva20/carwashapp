@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import DatePickerInput from '../components/DatePickerInput';
 
 function getTodayStr() {
   const d = new Date();
@@ -24,6 +25,7 @@ export default function Bills() {
   const [selectedReceiptJob, setSelectedReceiptJob] = useState(null);
   const [loading, setLoading] = useState(false);
   const [settlingId, setSettlingId] = useState(null);
+  const [splitModalJob, setSplitModalJob] = useState(null);
   const [editingJobId, setEditingJobId] = useState(null);
   const [editingAmount, setEditingAmount] = useState('');
   const [savingPrice, setSavingPrice] = useState(false);
@@ -184,6 +186,28 @@ export default function Bills() {
         setEditingJobId(null);
       }
       await api.post('/bills/settle-job', { job_id: jobId, payment_method: method });
+      await loadData();
+    } catch (e) {
+      alert(e.message || 'Failed to settle payment');
+    } finally {
+      setSettlingId(null);
+    }
+  }
+
+  async function handleConfirmSplit(jobId, cashAmt, gpayAmt) {
+    setSettlingId(jobId);
+    setSplitModalJob(null);
+    try {
+      if (editingJobId === jobId && editingAmount !== '' && !isNaN(Number(editingAmount)) && Number(editingAmount) >= 0) {
+        await api.post('/bills/adjust-amount', { job_id: jobId, new_amount: Number(editingAmount) });
+        setEditingJobId(null);
+      }
+      await api.post('/bills/settle-job', {
+        job_id: jobId,
+        payment_method: 'split',
+        cash_amount: cashAmt,
+        gpay_amount: gpayAmt
+      });
       await loadData();
     } catch (e) {
       alert(e.message || 'Failed to settle payment');
@@ -361,18 +385,14 @@ export default function Bills() {
           {/* Custom Date Range Selector */}
           {datePreset === 'custom' && (
             <div className="flex center gap-8">
-              <input
-                type="date"
+              <DatePickerInput
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
-                style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)' }}
               />
               <span className="muted" style={{ fontSize: 12 }}>to</span>
-              <input
-                type="date"
+              <DatePickerInput
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
-                style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)' }}
               />
             </div>
           )}
@@ -652,7 +672,11 @@ export default function Bills() {
                     {/* PAYMENT STATUS */}
                     <td style={{ padding: '12px 14px', textAlign: 'center' }}>
                       <span className={`pill ${isPaid ? 'pill-green' : 'pill-amber'}`} style={{ padding: '4px 10px', fontSize: 11.5 }}>
-                        {isPaid ? `✅ Paid (${job.bill?.payment_method?.toUpperCase() || 'CASH'})` : '⏳ Unpaid'}
+                        {isPaid
+                          ? (job.bill?.payment_method === 'split'
+                              ? `✅ Paid (SPLIT: ₹${job.bill?.cash_amount || 0} Cash / ₹${job.bill?.gpay_amount || 0} GPay)`
+                              : `✅ Paid (${job.bill?.payment_method?.toUpperCase() || 'CASH'})`)
+                          : '⏳ Unpaid'}
                       </span>
                     </td>
 
@@ -675,6 +699,14 @@ export default function Bills() {
                               title="Mark as Paid via GPay"
                             >
                               📱 GPay
+                            </button>
+                            <button
+                              className="btn-settle-pay"
+                              style={{ background: '#fefce8', color: '#854d0e', borderColor: '#fef08a' }}
+                              onClick={() => setSplitModalJob(job)}
+                              title="Mark as Paid via Split Payment (Cash + GPay)"
+                            >
+                              🔀 Split
                             </button>
                           </>
                         ) : null}
@@ -707,6 +739,15 @@ export default function Bills() {
           </table>
         )}
       </div>
+
+      {/* Split Payment Modal */}
+      {splitModalJob && (
+        <SplitPaymentModal
+          job={splitModalJob}
+          onClose={() => setSplitModalJob(null)}
+          onConfirm={handleConfirmSplit}
+        />
+      )}
 
       {/* Generate Bill Modal */}
       {showNew && (
@@ -888,10 +929,129 @@ export default function Bills() {
   );
 }
 
+function SplitPaymentModal({ job, onClose, onConfirm }) {
+  const totalPrice = job?.bill?.final_amount != null ? Number(job.bill.final_amount) : (Number(job?.price) || 0);
+  const [cashAmt, setCashAmt] = useState(Math.round(totalPrice / 2));
+  const [gpayAmt, setGpayAmt] = useState(totalPrice - Math.round(totalPrice / 2));
+  const [loading, setLoading] = useState(false);
+
+  function handleCashChange(val) {
+    const num = Math.max(0, Number(val) || 0);
+    setCashAmt(num);
+    setGpayAmt(Math.max(0, totalPrice - num));
+  }
+
+  function handleGpayChange(val) {
+    const num = Math.max(0, Number(val) || 0);
+    setGpayAmt(num);
+    setCashAmt(Math.max(0, totalPrice - num));
+  }
+
+  function setFiftyFifty() {
+    const half = Math.round(totalPrice / 2);
+    setCashAmt(half);
+    setGpayAmt(totalPrice - half);
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (cashAmt + gpayAmt !== totalPrice) {
+      alert(`The split sum (₹${cashAmt + gpayAmt}) must equal the total bill amount (₹${totalPrice})`);
+      return;
+    }
+    setLoading(true);
+    try {
+      await onConfirm(job.id, cashAmt, gpayAmt);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+      <div className="card" onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, padding: 20, borderRadius: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#0f172a' }}>🔀 Split Payment Settlement</h3>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#64748b' }}>✕</button>
+        </div>
+
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 12, marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#b45309', textTransform: 'uppercase' }}>Vehicle: {job?.vehicle?.reg_number || job?.reg_number}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#78350f' }}>Total Bill Amount:</span>
+            <strong style={{ fontSize: 22, fontWeight: 900, color: '#92400e' }}>₹{totalPrice}</strong>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#059669', display: 'block', marginBottom: 4 }}>💵 Cash Amount (₹)</label>
+              <input
+                type="number"
+                min="0"
+                max={totalPrice}
+                value={cashAmt}
+                onChange={e => handleCashChange(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', fontSize: 16, fontWeight: 800, borderRadius: 8, border: '1.5px solid #10b981', background: '#ecfdf5', color: '#047857' }}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#0284c7', display: 'block', marginBottom: 4 }}>📱 GPay Amount (₹)</label>
+              <input
+                type="number"
+                min="0"
+                max={totalPrice}
+                value={gpayAmt}
+                onChange={e => handleGpayChange(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', fontSize: 16, fontWeight: 800, borderRadius: 8, border: '1.5px solid #0284c7', background: '#f0f9ff', color: '#0369a1' }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 16, fontSize: 12 }}>
+            <span style={{ fontWeight: 600, color: '#64748b' }}>Sum: 💵 ₹{cashAmt} + 📱 ₹{gpayAmt}</span>
+            <span style={{ fontWeight: 800, color: cashAmt + gpayAmt === totalPrice ? '#059669' : '#dc2626' }}>
+              = ₹{cashAmt + gpayAmt} {cashAmt + gpayAmt === totalPrice ? '✓ Match' : `(Diff: ₹${totalPrice - (cashAmt + gpayAmt)})`}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <button
+              type="button"
+              onClick={setFiftyFifty}
+              style={{ flex: 1, padding: '6px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: '1px solid #cbd5e1', background: '#ffffff', color: '#334155', cursor: 'pointer' }}
+            >
+              ⚖️ 50 / 50 Split
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" onClick={onClose} className="btn btn-outline" style={{ flex: 1, padding: 10 }}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || cashAmt + gpayAmt !== totalPrice}
+              className="btn btn-primary"
+              style={{ flex: 1.5, padding: 10, fontSize: 14, fontWeight: 800, background: 'linear-gradient(135deg, #eab308, #ca8a04)', border: 'none' }}
+            >
+              {loading ? 'Saving...' : '✓ Confirm Split'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function GenerateBillModal({ onClose, onDone }) {
   const [regNumber, setRegNumber] = useState('');
   const [preview, setPreview] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [cashAmt, setCashAmt] = useState(0);
+  const [gpayAmt, setGpayAmt] = useState(0);
   const [redeem, setRedeem] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -908,16 +1068,44 @@ function GenerateBillModal({ onClose, onDone }) {
       }
       const p = await api.get(`/bills/preview/${job.id}`);
       setPreview(p);
+      const payable = p.amount || 0;
+      setCashAmt(Math.round(payable / 2));
+      setGpayAmt(payable - Math.round(payable / 2));
     } catch (e) {
       setError(e.message);
     }
+  }
+
+  const finalPayable = preview ? (redeem ? Math.max(0, Math.round(preview.amount * 0.5)) : preview.amount) : 0;
+
+  function handleCashChange(val) {
+    const num = Math.max(0, Number(val) || 0);
+    setCashAmt(num);
+    setGpayAmt(Math.max(0, finalPayable - num));
+  }
+
+  function handleGpayChange(val) {
+    const num = Math.max(0, Number(val) || 0);
+    setGpayAmt(num);
+    setCashAmt(Math.max(0, finalPayable - num));
   }
 
   async function pay() {
     setLoading(true);
     setError('');
     try {
-      await api.post('/bills', { job_id: preview.job_id, payment_method: paymentMethod, redeem });
+      if (paymentMethod === 'split' && cashAmt + gpayAmt !== finalPayable) {
+        setError(`Split amounts (₹${cashAmt + gpayAmt}) must equal total payable (₹${finalPayable})`);
+        setLoading(false);
+        return;
+      }
+      await api.post('/bills', {
+        job_id: preview.job_id,
+        payment_method: paymentMethod,
+        redeem,
+        cash_amount: cashAmt,
+        gpay_amount: gpayAmt
+      });
       onDone();
     } catch (e) {
       setError(e.message);
@@ -995,14 +1183,53 @@ function GenerateBillModal({ onClose, onDone }) {
                 >
                   📱 GPay
                 </button>
+                <button
+                  type="button"
+                  className={'btn ' + (paymentMethod === 'split' ? 'btn-primary' : 'btn-outline')}
+                  style={{ flex: 1, padding: 8 }}
+                  onClick={() => setPaymentMethod('split')}
+                >
+                  🔀 Split
+                </button>
               </div>
             </div>
+
+            {paymentMethod === 'split' && (
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', padding: 12, borderRadius: 10, marginTop: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#b45309', marginBottom: 8 }}>
+                  Enter Split Payment Amounts (Total: ₹{finalPayable}):
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#059669', display: 'block', marginBottom: 2 }}>💵 Cash (₹)</label>
+                    <input
+                      type="number"
+                      value={cashAmt}
+                      onChange={e => handleCashChange(e.target.value)}
+                      style={{ width: '100%', padding: '8px 10px', fontSize: 15, fontWeight: 800, borderRadius: 8, border: '1.5px solid #10b981', background: '#ecfdf5', color: '#047857' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#0284c7', display: 'block', marginBottom: 2 }}>📱 GPay (₹)</label>
+                    <input
+                      type="number"
+                      value={gpayAmt}
+                      onChange={e => handleGpayChange(e.target.value)}
+                      style={{ width: '100%', padding: '8px 10px', fontSize: 15, fontWeight: 800, borderRadius: 8, border: '1.5px solid #0284c7', background: '#f0f9ff', color: '#0369a1' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: cashAmt + gpayAmt === finalPayable ? '#059669' : '#dc2626', marginTop: 6, textAlign: 'center' }}>
+                  Sum: Cash ₹{cashAmt} + GPay ₹{gpayAmt} = ₹{cashAmt + gpayAmt}
+                </div>
+              </div>
+            )}
 
             <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', padding: 12, borderRadius: 8, marginTop: 12 }}>
               <div className="flex between center">
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#047857' }}>Total Payable:</span>
                 <strong style={{ fontSize: 20, color: '#047857' }}>
-                  ₹{redeem ? Math.max(0, Math.round(preview.amount * 0.5)) : preview.amount}
+                  ₹{finalPayable}
                 </strong>
               </div>
             </div>

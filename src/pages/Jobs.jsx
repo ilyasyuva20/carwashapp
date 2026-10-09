@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 import NewJobModal from '../components/NewJobModal';
+import DatePickerInput from '../components/DatePickerInput';
 
 const STATUS_LABEL = {
   in_progress: { text: 'In progress', cls: 'pill-amber' },
@@ -238,8 +239,7 @@ export default function Jobs() {
           {/* Integrated Date Filter Control */}
           <div className="date-filter-box" style={{ flex: '1 1 250px' }}>
             <span style={{ fontSize: 13, color: '#64748b', marginLeft: 4 }}>📅</span>
-            <input
-              type="date"
+            <DatePickerInput
               value={selectedDate}
               onChange={e => { setSelectedDate(e.target.value); setCurrentPage(1); }}
             />

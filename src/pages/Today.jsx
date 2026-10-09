@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api';
+import DatePickerInput from '../components/DatePickerInput';
 
 export default function Today() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
@@ -46,18 +47,9 @@ export default function Today() {
         </div>
 
         <div className="flex gap-8 center">
-          <input
-            type="date"
+          <DatePickerInput
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              fontWeight: 600,
-              fontSize: 14,
-              background: '#ffffff'
-            }}
           />
           <button
             className="btn btn-outline"

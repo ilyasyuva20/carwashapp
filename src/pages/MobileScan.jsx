@@ -79,7 +79,9 @@ export default function MobileScan() {
     const pad = n => String(n).padStart(2, '0');
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T10:00`;
   });
-  const [backdatePaymentMethod, setBackdatePaymentMethod] = useState('cash'); // 'cash' | 'gpay'
+  const [backdatePaymentMethod, setBackdatePaymentMethod] = useState('cash'); // 'cash' | 'gpay' | 'split'
+  const [backdateCashAmount, setBackdateCashAmount] = useState('');
+  const [backdateGpayAmount, setBackdateGpayAmount] = useState('');
 
   const [customerName, setCustomerName] = useState('');
   const [beforePhotos, setBeforePhotos] = useState([]);
@@ -456,6 +458,10 @@ export default function MobileScan() {
         jobPayload.completed_at = entryIso;
         jobPayload.status = 'completed';
         jobPayload.payment_method = backdatePaymentMethod;
+        if (backdatePaymentMethod === 'split') {
+          jobPayload.cash_amount = Number(backdateCashAmount) || 0;
+          jobPayload.gpay_amount = Number(backdateGpayAmount) || 0;
+        }
       }
 
       await api.post('/jobs', jobPayload);
@@ -1402,12 +1408,12 @@ export default function MobileScan() {
                     <label className="mobile-label" style={{ color: '#15803d', fontWeight: 700 }}>
                       Payment Method
                     </label>
-                    <div className="mobile-grid-2">
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
                       <button
                         type="button"
                         className={`mobile-tab-btn ${backdatePaymentMethod === 'cash' ? 'active settled' : ''}`}
                         onClick={() => setBackdatePaymentMethod('cash')}
-                        style={{ background: backdatePaymentMethod === 'cash' ? '#16a34a' : '#ffffff', color: backdatePaymentMethod === 'cash' ? '#ffffff' : '#334155' }}
+                        style={{ background: backdatePaymentMethod === 'cash' ? '#16a34a' : '#ffffff', color: backdatePaymentMethod === 'cash' ? '#ffffff' : '#334155', padding: '8px 4px', fontSize: 12 }}
                       >
                         💵 Cash
                       </button>
@@ -1415,11 +1421,70 @@ export default function MobileScan() {
                         type="button"
                         className={`mobile-tab-btn ${backdatePaymentMethod === 'gpay' ? 'active settled' : ''}`}
                         onClick={() => setBackdatePaymentMethod('gpay')}
-                        style={{ background: backdatePaymentMethod === 'gpay' ? '#16a34a' : '#ffffff', color: backdatePaymentMethod === 'gpay' ? '#ffffff' : '#334155' }}
+                        style={{ background: backdatePaymentMethod === 'gpay' ? '#16a34a' : '#ffffff', color: backdatePaymentMethod === 'gpay' ? '#ffffff' : '#334155', padding: '8px 4px', fontSize: 12 }}
                       >
                         📱 GPay / UPI
                       </button>
+                      <button
+                        type="button"
+                        className={`mobile-tab-btn ${backdatePaymentMethod === 'split' ? 'active settled' : ''}`}
+                        onClick={() => {
+                          setBackdatePaymentMethod('split');
+                          const tot = (offerPrice !== '' && !isNaN(Number(offerPrice))) ? Number(offerPrice) : (calculatedTotalPrice || 0);
+                          const defaultCash = Math.round(tot / 2);
+                          setBackdateCashAmount(String(defaultCash));
+                          setBackdateGpayAmount(String(tot - defaultCash));
+                        }}
+                        style={{ background: backdatePaymentMethod === 'split' ? '#16a34a' : '#ffffff', color: backdatePaymentMethod === 'split' ? '#ffffff' : '#334155', padding: '8px 4px', fontSize: 12 }}
+                      >
+                        🔀 Split
+                      </button>
                     </div>
+
+                    {backdatePaymentMethod === 'split' && (
+                      <div style={{ marginTop: 10, background: '#f8fafc', padding: 10, borderRadius: 8, border: '1.5px solid #16a34a' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d', marginBottom: 6 }}>
+                          Enter Split Payment (Total: ₹{(offerPrice !== '' && !isNaN(Number(offerPrice))) ? Number(offerPrice) : (calculatedTotalPrice || 0)})
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: '#334155' }}>💵 Cash (₹)</label>
+                            <input
+                              type="number"
+                              className="mobile-input"
+                              style={{ fontSize: 14, fontWeight: 700, padding: 8, borderColor: '#16a34a' }}
+                              value={backdateCashAmount}
+                              onChange={e => {
+                                const val = Number(e.target.value) || 0;
+                                const tot = (offerPrice !== '' && !isNaN(Number(offerPrice))) ? Number(offerPrice) : (calculatedTotalPrice || 0);
+                                setBackdateCashAmount(e.target.value);
+                                setBackdateGpayAmount(String(Math.max(0, tot - val)));
+                              }}
+                              placeholder="e.g. 300"
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: '#334155' }}>📱 GPay (₹)</label>
+                            <input
+                              type="number"
+                              className="mobile-input"
+                              style={{ fontSize: 14, fontWeight: 700, padding: 8, borderColor: '#16a34a' }}
+                              value={backdateGpayAmount}
+                              onChange={e => {
+                                const val = Number(e.target.value) || 0;
+                                const tot = (offerPrice !== '' && !isNaN(Number(offerPrice))) ? Number(offerPrice) : (calculatedTotalPrice || 0);
+                                setBackdateGpayAmount(e.target.value);
+                                setBackdateCashAmount(String(Math.max(0, tot - val)));
+                              }}
+                              placeholder="e.g. 200"
+                            />
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#15803d', marginTop: 6, fontWeight: 700, textAlign: 'right' }}>
+                          Cash ₹{backdateCashAmount || 0} + GPay ₹{backdateGpayAmount || 0} = ₹{(Number(backdateCashAmount)||0) + (Number(backdateGpayAmount)||0)}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: '#14532d', fontWeight: 600 }}>

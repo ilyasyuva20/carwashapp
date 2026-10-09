@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
+import DatePickerInput from '../components/DatePickerInput';
 
 function daysAgo(n) {
   const d = new Date();
@@ -17,6 +18,10 @@ function formatCategoryName(cat) {
     electricity: 'Electricity',
     staff_grocery: 'Staff Grocery',
     owner_advance: 'Owner Advance',
+    maintenance: 'Maintenance',
+    medical: 'Medical',
+    corporation: 'Corporation',
+    emi: 'EMI',
     other: 'Other'
   };
   if (map[cat]) return map[cat];
@@ -47,6 +52,8 @@ export default function Reports() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [expenseCategory, setExpenseCategory] = useState('all');
+
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
 
@@ -58,7 +65,7 @@ export default function Reports() {
         if (activeTab === 'sales') {
           res = await api.get(`/reports/sales-report?from=${from}&to=${to}`);
         } else if (activeTab === 'expenses') {
-          res = await api.get(`/reports/expense-report?from=${from}&to=${to}`);
+          res = await api.get(`/reports/expense-report?from=${from}&to=${to}${expenseCategory !== 'all' ? `&category=${expenseCategory}` : ''}`);
         } else if (activeTab === 'cars') {
           res = await api.get(`/reports/car-report?from=${from}&to=${to}`);
         } else if (activeTab === 'bikes') {
@@ -85,7 +92,7 @@ export default function Reports() {
     }
 
     fetchReportData();
-  }, [activeTab, from, to, month, year, searchQuery]);
+  }, [activeTab, from, to, month, year, searchQuery, expenseCategory]);
 
   return (
     <div>
@@ -128,9 +135,9 @@ export default function Reports() {
             />
           ) : (
             <>
-              <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ width: 140 }} />
+              <DatePickerInput value={from} onChange={e => setFrom(e.target.value)} style={{ width: 140 }} />
               <span className="muted">to</span>
-              <input type="date" value={to} onChange={e => setTo(e.target.value)} style={{ width: 140 }} />
+              <DatePickerInput value={to} onChange={e => setTo(e.target.value)} style={{ width: 140 }} />
             </>
           )}
         </div>
@@ -223,87 +230,148 @@ export default function Reports() {
           )}
 
           {/* 2. EXPENSE REPORT PAGE */}
-          {activeTab === 'expenses' && (
-            <div>
-              <div className="grid grid-4 mb-16">
-                <div className="card stat-card">
-                  <div className="icon">💸</div>
-                  <div className="value">₹{data.total_expenses || 0}</div>
-                  <div className="label">Total Expenses</div>
-                </div>
-                <div className="card stat-card">
-                  <div className="icon">💵</div>
-                  <div className="value">₹{data.cash_expenses || 0}</div>
-                  <div className="label">Cash Expenses</div>
-                </div>
-                <div className="card stat-card">
-                  <div className="icon">📱</div>
-                  <div className="value">₹{data.gpay_expenses || 0}</div>
-                  <div className="label">GPay / Online Expenses</div>
-                </div>
-                <div className="card stat-card">
-                  <div className="icon">📊</div>
-                  <div className="value">{data.expenses_count || 0}</div>
-                  <div className="label">Total Entries</div>
-                </div>
-              </div>
+          {activeTab === 'expenses' && (() => {
+            const rawExpList = data?.expenses || [];
+            const filteredExpList = expenseCategory === 'all'
+              ? rawExpList
+              : rawExpList.filter(e => {
+                  const cat = (e.category || 'other').toString().toLowerCase().replace(/[\s\-_]+/g, '');
+                  const target = expenseCategory.toString().toLowerCase().replace(/[\s\-_]+/g, '');
+                  return cat === target || cat.includes(target) || target.includes(cat);
+                });
 
-              {/* Category Breakdown */}
-              <div className="card mb-16">
-                <h3>Category Breakdown</h3>
-                <div className="flex gap-12 wrap mt-12">
-                  {Object.entries(data.category_totals || {}).map(([cat, total]) => (
-                    <div key={cat} style={{ background: 'var(--bg)', padding: '10px 16px', borderRadius: 10, border: '1px solid var(--border)' }}>
-                      <span className="muted" style={{ fontSize: 12 }}>{formatCategoryName(cat)}</span>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--red)' }}>₹{total}</div>
-                    </div>
-                  ))}
-                  {Object.keys(data.category_totals || {}).length === 0 && (
-                    <p className="muted">No expenses recorded for this period.</p>
-                  )}
-                </div>
-              </div>
+            const totalExp = filteredExpList.reduce((s, e) => s + Number(e.amount || 0), 0);
+            const cashExp = filteredExpList.filter(e => e.payment_method === 'cash').reduce((s, e) => s + Number(e.amount || 0), 0);
+            const gpayExp = filteredExpList.filter(e => e.payment_method !== 'cash').reduce((s, e) => s + Number(e.amount || 0), 0);
+            const entriesCount = filteredExpList.length;
 
-              <div className="card">
-                <h3>Expense Log</h3>
-                <div className="table-responsive" style={{ overflowX: 'auto' }}>
-                  <table className="table" style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
-                    <thead>
-                      <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ padding: '10px 12px' }}>Date</th>
-                        <th style={{ padding: '10px 12px' }}>Category</th>
-                        <th style={{ padding: '10px 12px' }}>Description</th>
-                        <th style={{ padding: '10px 12px' }}>Payment Method</th>
-                        <th style={{ padding: '10px 12px' }}>Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(!data.expenses || data.expenses.length === 0) && (
-                        <tr><td colSpan="5" className="muted" style={{ padding: 16, textAlign: 'center' }}>No expenses logged in this date range.</td></tr>
-                      )}
-                      {data.expenses?.map(e => (
-                        <tr key={e.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                          <td style={{ padding: '10px 12px' }}>{e.date}</td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span className="pill pill-red">
-                              {formatCategoryName(e.category)}
-                            </span>
-                          </td>
-                          <td style={{ padding: '10px 12px' }}>{e.description || '-'}</td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span className={`pill ${e.payment_method === 'cash' ? 'pill-green' : 'pill-blue'}`}>
-                              {e.payment_method}
-                            </span>
-                          </td>
-                          <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--red)' }}>₹{e.amount}</td>
+            const categoryTotals = {};
+            filteredExpList.forEach(e => {
+              const cat = e.category || 'other';
+              categoryTotals[cat] = (categoryTotals[cat] || 0) + Number(e.amount || 0);
+            });
+
+            return (
+              <div>
+                {/* Category Select Filter */}
+                <div className="card mb-16" style={{ background: '#f8fafc', padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div style={{ fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 15 }}>🔍 Filter by Expense Category:</span>
+                  </div>
+                  <select
+                    value={expenseCategory}
+                    onChange={e => setExpenseCategory(e.target.value)}
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      borderRadius: 8,
+                      border: '1.5px solid #0284c7',
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      cursor: 'pointer',
+                      minWidth: 240
+                    }}
+                  >
+                    <option value="all">📂 All Categories</option>
+                    <option value="purchase">Purchase (materials)</option>
+                    <option value="fuel">Fuel (Petrol/Diesel)</option>
+                    <option value="rental">Rental</option>
+                    <option value="electricity">Electricity</option>
+                    <option value="staff_grocery">Staff Grocery</option>
+                    <option value="owner_advance">Owner Advance</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="medical">Medical</option>
+                    <option value="corporation">Corporation</option>
+                    <option value="emi">EMI</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-4 mb-16">
+                  <div className="card stat-card">
+                    <div className="icon">💸</div>
+                    <div className="value">₹{totalExp}</div>
+                    <div className="label">Total Expenses</div>
+                  </div>
+                  <div className="card stat-card">
+                    <div className="icon">💵</div>
+                    <div className="value">₹{cashExp}</div>
+                    <div className="label">Cash Expenses</div>
+                  </div>
+                  <div className="card stat-card">
+                    <div className="icon">📱</div>
+                    <div className="value">₹{gpayExp}</div>
+                    <div className="label">GPay / Online Expenses</div>
+                  </div>
+                  <div className="card stat-card">
+                    <div className="icon">📊</div>
+                    <div className="value">{entriesCount}</div>
+                    <div className="label">Total Entries</div>
+                  </div>
+                </div>
+
+                {/* Category Breakdown */}
+                <div className="card mb-16">
+                  <h3>Category Breakdown</h3>
+                  <div className="flex gap-12 wrap mt-12">
+                    {Object.entries(categoryTotals).map(([cat, total]) => (
+                      <div key={cat} style={{ background: 'var(--bg)', padding: '10px 16px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                        <span className="muted" style={{ fontSize: 12 }}>{formatCategoryName(cat)}</span>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--red)' }}>₹{total}</div>
+                      </div>
+                    ))}
+                    {Object.keys(categoryTotals).length === 0 && (
+                      <p className="muted" style={{ fontWeight: 600 }}>No expenses found for this category in this date range.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="card">
+                  <h3>Expense Log</h3>
+                  <div className="table-responsive" style={{ overflowX: 'auto' }}>
+                    <table className="table" style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
+                          <th style={{ padding: '10px 12px' }}>Date</th>
+                          <th style={{ padding: '10px 12px' }}>Category</th>
+                          <th style={{ padding: '10px 12px' }}>Description</th>
+                          <th style={{ padding: '10px 12px' }}>Payment Method</th>
+                          <th style={{ padding: '10px 12px' }}>Amount</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {filteredExpList.length === 0 && (
+                          <tr>
+                            <td colSpan="5" style={{ padding: 24, textAlign: 'center', color: '#64748b', fontWeight: 600 }}>
+                              🚫 No data found for this category.
+                            </td>
+                          </tr>
+                        )}
+                        {filteredExpList.map(e => (
+                          <tr key={e.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '10px 12px' }}>{e.date}</td>
+                            <td style={{ padding: '10px 12px' }}>
+                              <span className="pill pill-red">
+                                {formatCategoryName(e.category)}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 12px' }}>{e.note || e.description || '-'}</td>
+                            <td style={{ padding: '10px 12px' }}>
+                              <span className={`pill ${e.payment_method === 'cash' ? 'pill-green' : 'pill-blue'}`}>
+                                {e.payment_method}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--red)' }}>₹{e.amount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* 3. CAR REPORT PAGE */}
           {activeTab === 'cars' && (

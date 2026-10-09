@@ -1,23 +1,51 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api';
+import DatePickerInput from '../components/DatePickerInput';
 
-const ITEMS_PER_PAGE = 6;
+const ITEMS_PER_PAGE = 10;
 
 export default function Employees() {
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('active'); // 'active', 'inactive', 'all'
   const [currentPage, setCurrentPage] = useState(1);
 
   const [showNew, setShowNew] = useState(false);
   const [editingEmp, setEditingEmp] = useState(null);
   const [advanceFor, setAdvanceFor] = useState(null);
   const [selectedEmp, setSelectedEmp] = useState(null);
+  const [editingAdvance, setEditingAdvance] = useState(null);
 
-  async function load() {
-    setEmployees(await api.get('/employees'));
+  async function load(status = statusFilter) {
+    setEmployees(await api.get(`/employees?status=${status}`));
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(statusFilter); }, [statusFilter]);
+
+  async function toggleActiveStatus(emp, newActiveState) {
+    const actionText = newActiveState === 1 ? 'reactivate' : 'inactivate / mark as resigned';
+    if (!window.confirm(`Are you sure you want to ${actionText} ${emp.name}?`)) return;
+    try {
+      if (newActiveState === 0) {
+        await api.delete(`/employees/${emp.id}`);
+      } else {
+        await api.put(`/employees/${emp.id}`, { active: 1 });
+      }
+      load();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function deleteEmployeePermanently(emp) {
+    if (!window.confirm(`Are you sure you want to PERMANENTLY delete ${emp.name}? This action cannot be undone.`)) return;
+    try {
+      await api.delete(`/employees/${emp.id}?permanent=true`);
+      load();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
 
   // Filter employees by Name or Phone
   const filtered = employees.filter(e => {
@@ -36,32 +64,98 @@ export default function Employees() {
 
   return (
     <div>
-      <div className="page-header flex between center" style={{ flexWrap: 'wrap', gap: 12 }}>
-        <h1>Employees</h1>
-        <button className="btn btn-primary" onClick={() => setShowNew(true)}>
+      <div className="page-header flex between center" style={{ flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <div>
+          <h1 style={{ margin: 0 }}>Employees</h1>
+          <p className="muted" style={{ margin: '4px 0 0 0', fontSize: 14 }}>
+            Manage staff profiles, role assignments, Aadhaar documents, and active/inactive status.
+          </p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setShowNew(true)} style={{ padding: '8px 16px', fontWeight: 600 }}>
           + Add employee
         </button>
       </div>
 
       {/* Search & Filter Controls */}
       <div className="card" style={{ marginBottom: 16, padding: '14px 18px' }}>
-        <div className="flex between center gap-12" style={{ flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 260, position: 'relative' }}>
+        <div className="flex between center gap-16" style={{ flexWrap: 'wrap' }}>
+          {/* Search Box */}
+          <div style={{ flex: '1 1 300px', position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 15, color: 'var(--muted)', pointerEvents: 'none' }}>
+              🔍
+            </span>
             <input
               type="text"
-              placeholder="🔍 Search employee by Name, Mobile Number, or Aadhaar..."
+              placeholder="Search employee by Name, Phone, or Aadhaar..."
               value={search}
               onChange={e => {
                 setSearch(e.target.value);
                 setCurrentPage(1);
               }}
-              style={{ width: '100%', paddingLeft: 36 }}
+              style={{ width: '100%', paddingLeft: 38, paddingRight: 12, height: 40, borderRadius: 8 }}
             />
-            <span style={{ position: 'absolute', left: 12, top: 10, fontSize: 16, opacity: 0.5 }}>🔍</span>
           </div>
 
-          <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>
-            Showing {filtered.length} {filtered.length === 1 ? 'employee' : 'employees'}
+          {/* Status Filter Pill Tabs */}
+          <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: 4, borderRadius: 8, border: '1px solid var(--border)' }}>
+            <button
+              type="button"
+              style={{
+                border: 'none',
+                background: statusFilter === 'active' ? '#ffffff' : 'transparent',
+                color: statusFilter === 'active' ? 'var(--foreground)' : 'var(--muted)',
+                fontWeight: statusFilter === 'active' ? 700 : 500,
+                boxShadow: statusFilter === 'active' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                padding: '6px 14px',
+                borderRadius: 6,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onClick={() => { setStatusFilter('active'); setCurrentPage(1); }}
+            >
+              🟢 Active
+            </button>
+            <button
+              type="button"
+              style={{
+                border: 'none',
+                background: statusFilter === 'inactive' ? '#ffffff' : 'transparent',
+                color: statusFilter === 'inactive' ? 'var(--foreground)' : 'var(--muted)',
+                fontWeight: statusFilter === 'inactive' ? 700 : 500,
+                boxShadow: statusFilter === 'inactive' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                padding: '6px 14px',
+                borderRadius: 6,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onClick={() => { setStatusFilter('inactive'); setCurrentPage(1); }}
+            >
+              🔴 Inactive / Resigned
+            </button>
+            <button
+              type="button"
+              style={{
+                border: 'none',
+                background: statusFilter === 'all' ? '#ffffff' : 'transparent',
+                color: statusFilter === 'all' ? 'var(--foreground)' : 'var(--muted)',
+                fontWeight: statusFilter === 'all' ? 700 : 500,
+                boxShadow: statusFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                padding: '6px 14px',
+                borderRadius: 6,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onClick={() => { setStatusFilter('all'); setCurrentPage(1); }}
+            >
+              👥 All
+            </button>
+          </div>
+
+          <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 600 }}>
+            Showing {paginated.length} of {filtered.length} {filtered.length === 1 ? 'employee' : 'employees'}
           </div>
         </div>
       </div>
@@ -69,32 +163,33 @@ export default function Employees() {
       {/* Employee List Table */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {filtered.length === 0 ? (
-          <p className="muted" style={{ padding: '24px', textAlign: 'center', margin: 0 }}>
-            {search ? 'No employees matched your search.' : 'No employees added yet.'}
+          <p className="muted" style={{ padding: '32px', textAlign: 'center', margin: 0, fontSize: 14 }}>
+            {search ? 'No employees matched your search query.' : 'No employees found in this status category.'}
           </p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '2px solid var(--border)', fontSize: 13, color: 'var(--muted)' }}>
-                  <th style={{ padding: '12px 16px', width: 60 }}>Profile</th>
-                  <th style={{ padding: '12px 16px' }}>Name</th>
-                  <th style={{ padding: '12px 16px' }}>Role</th>
-                  <th style={{ padding: '12px 16px' }}>Phone</th>
-                  <th style={{ padding: '12px 16px' }}>Monthly Salary</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
+                <tr style={{ background: '#f8fafc', borderBottom: '2px solid var(--border)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--muted)' }}>
+                  <th style={{ padding: '14px 16px', width: 60, textAlign: 'center', verticalAlign: 'middle' }}>Profile</th>
+                  <th style={{ padding: '14px 16px', verticalAlign: 'middle' }}>Name & Details</th>
+                  <th style={{ padding: '14px 16px', verticalAlign: 'middle' }}>Role</th>
+                  <th style={{ padding: '14px 16px', verticalAlign: 'middle' }}>Status</th>
+                  <th style={{ padding: '14px 16px', verticalAlign: 'middle' }}>Phone</th>
+                  <th style={{ padding: '14px 16px', verticalAlign: 'middle' }}>Monthly Salary</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'right', verticalAlign: 'middle' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {paginated.map(e => (
-                  <tr key={e.id} style={{ borderBottom: '1px solid var(--border)', fontSize: 14 }}>
+                  <tr key={e.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: 14, transition: 'background 0.1s ease' }}>
                     {/* Profile Pic / Avatar */}
-                    <td style={{ padding: '12px 16px' }}>
+                    <td style={{ padding: '12px 16px', verticalAlign: 'middle', textAlign: 'center' }}>
                       <div style={{
-                        width: 38,
-                        height: 38,
+                        width: 40,
+                        height: 40,
                         borderRadius: '50%',
-                        background: 'linear-gradient(135deg, var(--teal), var(--teal-dark))',
+                        background: e.active === 0 ? '#94a3b8' : 'linear-gradient(135deg, var(--teal), var(--teal-dark))',
                         color: '#ffffff',
                         fontWeight: 700,
                         fontSize: 16,
@@ -102,16 +197,17 @@ export default function Employees() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         textTransform: 'uppercase',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.08)'
+                        margin: '0 auto',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.06)'
                       }}>
                         {e.name ? e.name.charAt(0) : '👤'}
                       </div>
                     </td>
 
-                    {/* Name */}
-                    <td style={{ padding: '12px 16px' }}>
-                      <div className="flex center gap-8">
-                        <strong style={{ fontSize: 15, color: 'var(--foreground)' }}>{e.name}</strong>
+                    {/* Name & Details */}
+                    <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
+                      <div className="flex center gap-8" style={{ flexWrap: 'wrap' }}>
+                        <strong style={{ fontSize: 15, color: e.active === 0 ? 'var(--muted)' : 'var(--foreground)' }}>{e.name}</strong>
                         {e.aadhaar_file ? (
                           <span className="pill pill-teal" style={{ fontSize: 11, padding: '2px 8px' }}>
                             🪪 Aadhaar Attached
@@ -128,14 +224,27 @@ export default function Employees() {
                     </td>
 
                     {/* Role */}
-                    <td style={{ padding: '12px 16px' }}>
-                      <span className="pill pill-teal" style={{ fontSize: 12, fontWeight: 600, background: '#f1f5f9', color: 'var(--foreground)' }}>
+                    <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
+                      <span className="pill" style={{ fontSize: 12, fontWeight: 600, background: '#f1f5f9', color: 'var(--foreground)', border: '1px solid var(--border)' }}>
                         {e.role || 'Washer'}
                       </span>
                     </td>
 
+                    {/* Status */}
+                    <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
+                      {e.active === 0 ? (
+                        <span className="pill pill-red" style={{ fontSize: 11, padding: '3px 9px', fontWeight: 600 }}>
+                          🔴 Inactive / Resigned
+                        </span>
+                      ) : (
+                        <span className="pill pill-green" style={{ fontSize: 11, padding: '3px 9px', fontWeight: 600 }}>
+                          🟢 Active
+                        </span>
+                      )}
+                    </td>
+
                     {/* Phone */}
-                    <td style={{ padding: '12px 16px', fontWeight: 500 }}>
+                    <td style={{ padding: '12px 16px', verticalAlign: 'middle', fontWeight: 500 }}>
                       {e.phone ? (
                         <span>📞 {e.phone}</span>
                       ) : (
@@ -144,27 +253,56 @@ export default function Employees() {
                     </td>
 
                     {/* Salary */}
-                    <td style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--foreground)' }}>
-                      ₹{e.salary_monthly} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>/mo</span>
+                    <td style={{ padding: '12px 16px', verticalAlign: 'middle', fontWeight: 700, color: 'var(--foreground)' }}>
+                      ₹{Number(e.salary_monthly || 0).toLocaleString()} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>/mo</span>
                     </td>
 
                     {/* Actions */}
-                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                      <div className="flex gap-8" style={{ justifyContent: 'flex-end' }}>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', verticalAlign: 'middle' }}>
+                      <div className="flex gap-6" style={{ justifyContent: 'flex-end', alignItems: 'center' }}>
                         <button
                           className="btn btn-outline"
-                          style={{ fontSize: 12, padding: '5px 12px' }}
+                          style={{ fontSize: 12, padding: '6px 10px', height: 32 }}
                           onClick={() => setSelectedEmp(e)}
                         >
-                          👁️ View Details
+                          👁️ View
                         </button>
                         <button
                           className="btn btn-outline"
-                          style={{ fontSize: 12, padding: '5px 12px' }}
+                          style={{ fontSize: 12, padding: '6px 10px', height: 32 }}
                           onClick={() => setEditingEmp(e)}
                         >
                           ✏️ Edit
                         </button>
+                        {e.active !== 0 ? (
+                          <button
+                            className="btn btn-outline"
+                            style={{ fontSize: 12, padding: '6px 10px', height: 32, color: '#d97706', borderColor: '#f59e0b' }}
+                            onClick={() => toggleActiveStatus(e, 0)}
+                            title="Mark employee as inactive / resigned"
+                          >
+                            🚫 Inactivate
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              className="btn btn-outline"
+                              style={{ fontSize: 12, padding: '6px 10px', height: 32, color: '#16a34a', borderColor: '#22c55e' }}
+                              onClick={() => toggleActiveStatus(e, 1)}
+                              title="Reactivate employee"
+                            >
+                              ✅ Reactivate
+                            </button>
+                            <button
+                              className="btn btn-outline"
+                              style={{ fontSize: 12, padding: '6px 10px', height: 32, color: '#e11d48', borderColor: '#f43f5e' }}
+                              onClick={() => deleteEmployeePermanently(e)}
+                              title="Permanently delete employee"
+                            >
+                              🗑️ Delete
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -176,12 +314,12 @@ export default function Employees() {
 
         {/* Pagination bar */}
         {totalPages > 1 && (
-          <div className="flex between center mt-16" style={{ paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+          <div className="flex between center" style={{ padding: '14px 18px', background: '#f8fafc', borderTop: '1px solid var(--border)' }}>
             <button
               className="btn btn-outline"
               disabled={pageIndex <= 1}
               onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-              style={{ fontSize: 13 }}
+              style={{ fontSize: 13, padding: '6px 14px' }}
             >
               ← Previous
             </button>
@@ -192,7 +330,7 @@ export default function Employees() {
               className="btn btn-outline"
               disabled={pageIndex >= totalPages}
               onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-              style={{ fontSize: 13 }}
+              style={{ fontSize: 13, padding: '6px 14px' }}
             >
               Next →
             </button>
@@ -203,6 +341,18 @@ export default function Employees() {
       {showNew && <NewEmployeeModal onClose={() => setShowNew(false)} onCreated={() => { setShowNew(false); load(); }} />}
       {editingEmp && <EditEmployeeModal employee={editingEmp} onClose={() => setEditingEmp(null)} onUpdated={() => { setEditingEmp(null); load(); }} />}
       {advanceFor && <AdvanceModal employee={advanceFor} onClose={() => setAdvanceFor(null)} onDone={() => setAdvanceFor(null)} />}
+      {editingAdvance && (
+        <AdvanceModal
+          employee={editingAdvance.employee || selectedEmp}
+          advance={editingAdvance}
+          onClose={() => setEditingAdvance(null)}
+          onDone={() => {
+            setEditingAdvance(null);
+            setSelectedEmp(null);
+            load();
+          }}
+        />
+      )}
       {selectedEmp && (
         <EmployeeDetailsModal
           employee={selectedEmp}
@@ -211,6 +361,11 @@ export default function Employees() {
             const empToEdit = selectedEmp;
             setSelectedEmp(null);
             setEditingEmp(empToEdit);
+          }}
+          onEditAdvance={(adv) => {
+            const emp = selectedEmp;
+            setSelectedEmp(null);
+            setEditingAdvance({ ...adv, employee: emp });
           }}
         />
       )}
@@ -313,7 +468,7 @@ function NewEmployeeModal({ onClose, onCreated }) {
           </div>
           <div className="field">
             <label>Joining Date</label>
-            <input type="date" value={form.join_date} onChange={e => setForm({ ...form, join_date: e.target.value })} />
+            <DatePickerInput value={form.join_date} onChange={e => setForm({ ...form, join_date: e.target.value })} />
           </div>
         </div>
 
@@ -369,7 +524,8 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
     role: employee.role || 'Washer',
     salary_monthly: employee.salary_monthly || '',
     join_date: employee.join_date || new Date().toISOString().slice(0, 10),
-    aadhaar_number: employee.aadhaar_number || ''
+    aadhaar_number: employee.aadhaar_number || '',
+    active: employee.active !== undefined ? employee.active : 1
   });
   const [aadhaarFile, setAadhaarFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -398,6 +554,7 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
       formData.append('salary_monthly', Number(form.salary_monthly) || 0);
       formData.append('join_date', form.join_date);
       formData.append('aadhaar_number', form.aadhaar_number);
+      formData.append('active', form.active);
       if (aadhaarFile) {
         formData.append('aadhaar_file', aadhaarFile);
       }
@@ -450,14 +607,24 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
           </div>
         </div>
 
-        <div className="grid grid-2">
+        <div className="grid grid-3">
           <div className="field">
             <label>Monthly Salary (₹)</label>
             <input type="number" value={form.salary_monthly} onChange={e => setForm({ ...form, salary_monthly: e.target.value })} placeholder="18000" />
           </div>
           <div className="field">
             <label>Joining Date</label>
-            <input type="date" value={form.join_date} onChange={e => setForm({ ...form, join_date: e.target.value })} />
+            <DatePickerInput value={form.join_date} onChange={e => setForm({ ...form, join_date: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Status</label>
+            <select
+              value={String(form.active)}
+              onChange={e => setForm({ ...form, active: Number(e.target.value) })}
+            >
+              <option value="1">🟢 Active</option>
+              <option value="0">🔴 Inactive / Resigned</option>
+            </select>
           </div>
         </div>
 
@@ -510,7 +677,7 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
   );
 }
 
-function EmployeeDetailsModal({ employee, onClose, onEdit }) {
+function EmployeeDetailsModal({ employee, onClose, onEdit, onEditAdvance }) {
   const emp = employee;
   const [advances, setAdvances] = useState([]);
 
@@ -626,6 +793,7 @@ function EmployeeDetailsModal({ employee, onClose, onEdit }) {
                     <th style={{ padding: '6px 8px' }}>Amount</th>
                     <th style={{ padding: '6px 8px' }}>Method</th>
                     <th style={{ padding: '6px 8px' }}>Note</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -641,6 +809,17 @@ function EmployeeDetailsModal({ employee, onClose, onEdit }) {
                         </span>
                       </td>
                       <td style={{ padding: '6px 8px', color: 'var(--muted)' }}>{a.note || '-'}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          style={{ padding: '2px 8px', fontSize: 11, color: '#0284c7', borderColor: '#0284c7', fontWeight: 600 }}
+                          onClick={() => onEditAdvance && onEditAdvance(a)}
+                          title="Edit advance details"
+                        >
+                          ✏️ Edit
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -660,11 +839,24 @@ function EmployeeDetailsModal({ employee, onClose, onEdit }) {
   );
 }
 
-function AdvanceModal({ employee, onClose, onDone }) {
-  const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [note, setNote] = useState('');
+function parseDateForInput(dateStr) {
+  if (!dateStr) return '';
+  const dt = new Date(dateStr);
+  if (isNaN(dt.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+function AdvanceModal({ employee, advance, onClose, onDone }) {
+  const isEditing = Boolean(advance && advance.id);
+  const [amount, setAmount] = useState(() => isEditing ? String(advance.amount || '') : '');
+  const [paymentMethod, setPaymentMethod] = useState(() => isEditing ? (advance.payment_method || 'cash') : 'cash');
+  const [note, setNote] = useState(() => isEditing ? (advance.note || '') : '');
   const [advanceDateTime, setAdvanceDateTime] = useState(() => {
+    if (isEditing && advance.date) {
+      const parsed = parseDateForInput(advance.date);
+      if (parsed) return parsed;
+    }
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -675,12 +867,33 @@ function AdvanceModal({ employee, onClose, onDone }) {
     if (!amount) return;
     setLoading(true);
     try {
-      await api.post(`/employees/${employee.id}/advance`, {
-        amount: Number(amount),
-        payment_method: paymentMethod,
-        date: advanceDateTime,
-        note
-      });
+      if (isEditing) {
+        await api.put(`/employees/advances/${advance.id}`, {
+          amount: Number(amount),
+          payment_method: paymentMethod,
+          date: advanceDateTime,
+          note
+        });
+      } else {
+        await api.post(`/employees/${employee.id}/advance`, {
+          amount: Number(amount),
+          payment_method: paymentMethod,
+          date: advanceDateTime,
+          note
+        });
+      }
+      onDone();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!isEditing) return;
+    if (!window.confirm('Are you sure you want to delete this advance entry?')) return;
+    setLoading(true);
+    try {
+      await api.delete(`/employees/advances/${advance.id}`);
       onDone();
     } finally {
       setLoading(false);
@@ -691,7 +904,9 @@ function AdvanceModal({ employee, onClose, onDone }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="flex between center" style={{ marginBottom: 14 }}>
-          <h2 style={{ marginTop: 0, marginBottom: 0 }}>Advance for {employee.name}</h2>
+          <h2 style={{ marginTop: 0, marginBottom: 0 }}>
+            {isEditing ? `✏️ Edit Advance (${employee?.name || 'Staff'})` : `Advance for ${employee?.name}`}
+          </h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--muted)' }}>
             ✕
           </button>
@@ -750,6 +965,17 @@ function AdvanceModal({ employee, onClose, onDone }) {
         </div>
 
         <div className="flex gap-8 mt-16">
+          {isEditing && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={handleDelete}
+              disabled={loading}
+              style={{ color: '#e11d48', borderColor: '#f43f5e' }}
+            >
+              🗑️ Delete
+            </button>
+          )}
           <button className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>
             Cancel
           </button>
@@ -757,9 +983,9 @@ function AdvanceModal({ employee, onClose, onDone }) {
             className="btn btn-primary"
             onClick={save}
             disabled={loading || !amount || !advanceDateTime}
-            style={{ flex: 1 }}
+            style={{ flex: 1.5 }}
           >
-            {loading ? 'Saving...' : 'Save Advance'}
+            {loading ? 'Saving...' : isEditing ? 'Update Advance' : 'Save Advance'}
           </button>
         </div>
       </div>

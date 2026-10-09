@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import DatePickerInput from '../components/DatePickerInput';
 
 export default function WorkshopBills() {
   const [data, setData] = useState({
@@ -259,18 +260,14 @@ export default function WorkshopBills() {
           {/* Custom Date Picker (if custom) */}
           {datePreset === 'custom' && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input
-                type="date"
+              <DatePickerInput
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
-                style={{ fontSize: 13, padding: '4px 8px' }}
               />
               <span style={{ fontSize: 12, color: '#64748b' }}>to</span>
-              <input
-                type="date"
+              <DatePickerInput
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
-                style={{ fontSize: 13, padding: '4px 8px' }}
               />
             </div>
           )}

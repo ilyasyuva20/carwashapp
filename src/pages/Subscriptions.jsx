@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import DatePickerInput from '../components/DatePickerInput';
 
 const MAX_WASH_OPTIONS = [
   { value: 4, label: '4 Washes / month' },
@@ -1030,16 +1031,14 @@ export default function Subscriptions() {
               <div className="grid grid-2">
                 <div className="field">
                   <label>Start Date</label>
-                  <input
-                    type="date"
+                  <DatePickerInput
                     value={subForm.start_date}
                     onChange={e => setSubForm({ ...subForm, start_date: e.target.value })}
                   />
                 </div>
                 <div className="field">
                   <label>Valid Till (End Date)</label>
-                  <input
-                    type="date"
+                  <DatePickerInput
                     value={subForm.end_date}
                     onChange={e => setSubForm({ ...subForm, end_date: e.target.value })}
                   />

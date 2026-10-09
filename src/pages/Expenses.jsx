@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import DatePickerInput from '../components/DatePickerInput';
 
 const CATEGORIES = [
   { value: 'purchase', label: 'Purchase (materials)' },
@@ -8,6 +9,10 @@ const CATEGORIES = [
   { value: 'electricity', label: 'Electricity' },
   { value: 'staff_grocery', label: 'Staff Grocery' },
   { value: 'owner_advance', label: 'Owner Advance' },
+  { value: 'maintenance', label: 'Maintenance' },
+  { value: 'medical', label: 'Medical' },
+  { value: 'corporation', label: 'Corporation' },
+  { value: 'emi', label: 'EMI' },
   { value: 'other', label: 'Other' }
 ];
 
@@ -41,7 +46,7 @@ export default function Expenses() {
     load();
   }
 
-  const total = expenses.reduce((s, e) => s + e.amount, 0);
+  const total = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
 
   return (
     <div>
@@ -106,7 +111,7 @@ export default function Expenses() {
           </div>
           <div className="field">
             <label>Date</label>
-            <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+            <DatePickerInput value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
           </div>
           <button className="btn btn-primary" onClick={add} disabled={!form.amount}>Add expense</button>
         </div>

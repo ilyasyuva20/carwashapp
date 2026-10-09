@@ -17,6 +17,7 @@ export default function SalaryAdvances() {
   const [search, setSearch] = useState('');
   const [selectedEmpAdvance, setSelectedEmpAdvance] = useState(null);
   const [selectedEmpDetails, setSelectedEmpDetails] = useState(null);
+  const [editingAdvance, setEditingAdvance] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const selectedMonthPrefix = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
@@ -292,6 +293,21 @@ export default function SalaryAdvances() {
         />
       )}
 
+      {/* Edit Advance Modal */}
+      {editingAdvance && (
+        <AdvanceModal
+          employee={editingAdvance.employee || selectedEmpDetails || selectedEmpAdvance}
+          advance={editingAdvance}
+          onClose={() => setEditingAdvance(null)}
+          onDone={() => {
+            setEditingAdvance(null);
+            setSelectedEmpDetails(null);
+            setSelectedEmpAdvance(null);
+            loadData();
+          }}
+        />
+      )}
+
       {/* Detailed Salary Breakdown Modal */}
       {selectedEmpDetails && (
         <SalaryBreakdownModal
@@ -306,17 +322,35 @@ export default function SalaryAdvances() {
             setSelectedEmpDetails(null);
             setSelectedEmpAdvance(emp);
           }}
+          onEditAdvance={(adv) => {
+            const emp = selectedEmpDetails;
+            setSelectedEmpDetails(null);
+            setEditingAdvance({ ...adv, employee: emp });
+          }}
         />
       )}
     </div>
   );
 }
 
-function AdvanceModal({ employee, onClose, onDone }) {
-  const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [note, setNote] = useState('');
+function parseDateForInput(dateStr) {
+  if (!dateStr) return '';
+  const dt = new Date(dateStr);
+  if (isNaN(dt.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+function AdvanceModal({ employee, advance, onClose, onDone }) {
+  const isEditing = Boolean(advance && advance.id);
+  const [amount, setAmount] = useState(() => isEditing ? String(advance.amount || '') : '');
+  const [paymentMethod, setPaymentMethod] = useState(() => isEditing ? (advance.payment_method || 'cash') : 'cash');
+  const [note, setNote] = useState(() => isEditing ? (advance.note || '') : '');
   const [advanceDateTime, setAdvanceDateTime] = useState(() => {
+    if (isEditing && advance.date) {
+      const parsed = parseDateForInput(advance.date);
+      if (parsed) return parsed;
+    }
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -327,12 +361,33 @@ function AdvanceModal({ employee, onClose, onDone }) {
     if (!amount) return;
     setLoading(true);
     try {
-      await api.post(`/employees/${employee.id}/advance`, {
-        amount: Number(amount),
-        payment_method: paymentMethod,
-        date: advanceDateTime,
-        note
-      });
+      if (isEditing) {
+        await api.put(`/employees/advances/${advance.id}`, {
+          amount: Number(amount),
+          payment_method: paymentMethod,
+          date: advanceDateTime,
+          note
+        });
+      } else {
+        await api.post(`/employees/${employee.id}/advance`, {
+          amount: Number(amount),
+          payment_method: paymentMethod,
+          date: advanceDateTime,
+          note
+        });
+      }
+      onDone();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!isEditing) return;
+    if (!window.confirm('Are you sure you want to delete this advance entry?')) return;
+    setLoading(true);
+    try {
+      await api.delete(`/employees/advances/${advance.id}`);
       onDone();
     } finally {
       setLoading(false);
@@ -343,7 +398,9 @@ function AdvanceModal({ employee, onClose, onDone }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 440 }}>
         <div className="flex between center" style={{ marginBottom: 14 }}>
-          <h2 style={{ marginTop: 0, marginBottom: 0, fontSize: 18 }}>Advance for {employee.name}</h2>
+          <h2 style={{ marginTop: 0, marginBottom: 0, fontSize: 18 }}>
+            {isEditing ? `✏️ Edit Advance (${employee?.name || 'Staff'})` : `Advance for ${employee?.name}`}
+          </h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--muted)' }}>
             ✕
           </button>
@@ -402,6 +459,17 @@ function AdvanceModal({ employee, onClose, onDone }) {
         </div>
 
         <div className="flex gap-8 mt-16">
+          {isEditing && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={handleDelete}
+              disabled={loading}
+              style={{ color: '#e11d48', borderColor: '#f43f5e' }}
+            >
+              🗑️ Delete
+            </button>
+          )}
           <button className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>
             Cancel
           </button>
@@ -409,9 +477,9 @@ function AdvanceModal({ employee, onClose, onDone }) {
             className="btn btn-primary"
             onClick={save}
             disabled={loading || !amount || !advanceDateTime}
-            style={{ flex: 1 }}
+            style={{ flex: 1.5 }}
           >
-            {loading ? 'Saving...' : 'Save Advance'}
+            {loading ? 'Saving...' : isEditing ? 'Update Advance' : 'Save Advance'}
           </button>
         </div>
       </div>
@@ -420,7 +488,7 @@ function AdvanceModal({ employee, onClose, onDone }) {
   );
 }
 
-function SalaryBreakdownModal({ employee, payroll, advances, selectedMonthPrefix, selectedMonthLabel, onClose, onGiveAdvance }) {
+function SalaryBreakdownModal({ employee, payroll, advances, selectedMonthPrefix, selectedMonthLabel, onClose, onGiveAdvance, onEditAdvance }) {
   const emp = employee;
   const pay = payroll || {};
 
@@ -574,6 +642,7 @@ function SalaryBreakdownModal({ employee, payroll, advances, selectedMonthPrefix
                     <th style={{ padding: '6px 8px' }}>Amount</th>
                     <th style={{ padding: '6px 8px' }}>Method</th>
                     <th style={{ padding: '6px 8px' }}>Note</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -589,6 +658,17 @@ function SalaryBreakdownModal({ employee, payroll, advances, selectedMonthPrefix
                         </span>
                       </td>
                       <td style={{ padding: '6px 8px', color: 'var(--muted)' }}>{a.note || '-'}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          style={{ padding: '2px 8px', fontSize: 11, color: '#0284c7', borderColor: '#0284c7', fontWeight: 600 }}
+                          onClick={() => onEditAdvance && onEditAdvance(a)}
+                          title="Edit advance details"
+                        >
+                          ✏️ Edit
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
