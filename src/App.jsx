@@ -1,4 +1,5 @@
 import { Routes, Route, useLocation } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import Sidebar from './components/Sidebar.jsx';
 import Today from './pages/Today.jsx';
 import RunningJobs from './pages/RunningJobs.jsx';
@@ -26,6 +27,7 @@ export default function App() {
   if (isMobileRoute) {
     return (
       <div className="mobile-app-shell">
+        <Toaster position="top-center" toastOptions={{ duration: 3000, style: { fontSize: '14px', borderRadius: '8px' } }} />
         <Routes>
           <Route path="/mobile" element={<MobileScan />} />
           <Route path="/mobile/jobs" element={<MobileJobs />} />
@@ -37,6 +39,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <Toaster position="top-right" toastOptions={{ duration: 3000, style: { fontSize: '14px', borderRadius: '8px' } }} />
       <Sidebar />
       <div className="main">
         <Routes>

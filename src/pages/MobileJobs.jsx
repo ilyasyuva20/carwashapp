@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import MobileBottomNav from '../components/MobileBottomNav';
+import toast from 'react-hot-toast';
 
 function formatTimeAMPM(dateStr) {
   if (!dateStr) return '';
@@ -62,9 +63,10 @@ export default function MobileJobs() {
     setCompletingId(jobId);
     try {
       await api.post(`/jobs/${jobId}/complete`);
+      toast.success('Job marked as completed successfully!');
       await fetchRunningJobs();
     } catch (err) {
-      alert('Failed to complete job: ' + err.message);
+      toast.error('Failed to complete job: ' + err.message);
     } finally {
       setCompletingId(null);
     }
@@ -75,9 +77,10 @@ export default function MobileJobs() {
     setDeletingId(jobId);
     try {
       await api.del(`/jobs/${jobId}`);
+      toast.success('Active wash job deleted.');
       await fetchRunningJobs();
     } catch (err) {
-      alert('Failed to delete job: ' + (err.message || 'Unknown error'));
+      toast.error('Failed to delete job: ' + (err.message || 'Unknown error'));
     } finally {
       setDeletingId(null);
     }

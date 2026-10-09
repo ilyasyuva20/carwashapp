@@ -436,7 +436,7 @@ export default function MobileScan() {
       await saveVehicleCorrections();
 
       const jobPayload = {
-        reg_number: vehicle.reg_number,
+        reg_number: cleanReg,
         wash_type_id: selectedWashId,
         eta_minutes: 30,
         phone: cleanPhone,
@@ -447,7 +447,11 @@ export default function MobileScan() {
         offer_price: finalOfferPrice,
         customer_type: customerType,
         workshop_id: (customerType === 'workshop' && workshopId) ? parseInt(workshopId) : null,
-        payment_status: paymentStatus
+        payment_status: paymentStatus,
+        brand: vehicle?.brand || 'Unknown',
+        model: vehicle?.model === '__OTHER__' ? '' : (vehicle?.model || 'Unknown'),
+        segment: vehicle?.segment || 'hatchback',
+        color: vehicle?.color === '__OTHER__' ? '' : (vehicle?.color || 'Unknown')
       };
 
       if (isBackdated) {
@@ -457,6 +461,7 @@ export default function MobileScan() {
         jobPayload.exit_time = entryIso;
         jobPayload.completed_at = entryIso;
         jobPayload.status = 'completed';
+        jobPayload.payment_status = 'settled';
         jobPayload.payment_method = backdatePaymentMethod;
         if (backdatePaymentMethod === 'split') {
           jobPayload.cash_amount = Number(backdateCashAmount) || 0;

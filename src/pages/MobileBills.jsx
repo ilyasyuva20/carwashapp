@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import MobileBottomNav from '../components/MobileBottomNav';
+import toast from 'react-hot-toast';
 
 function formatDateTime(dateStr) {
   if (!dateStr) return '-';
@@ -164,9 +165,10 @@ export default function MobileBills() {
         setEditingJobId(null);
       }
       await api.post('/bills/settle-job', { job_id: jobId, payment_method: method });
+      toast.success('Payment settled successfully!');
       await fetchBills();
     } catch (err) {
-      alert('Failed to process payment: ' + (err.message || 'Error occurred'));
+      toast.error('Failed to process payment: ' + (err.message || 'Error occurred'));
     } finally {
       setSettlingId(null);
     }
@@ -188,7 +190,7 @@ export default function MobileBills() {
       });
       await fetchBills();
     } catch (err) {
-      alert('Failed to process split payment: ' + (err.message || 'Error occurred'));
+      toast.error('Failed to process split payment: ' + (err.message || 'Error occurred'));
     } finally {
       setSettlingId(null);
     }
