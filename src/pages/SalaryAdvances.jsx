@@ -316,6 +316,11 @@ function AdvanceModal({ employee, onClose, onDone }) {
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [note, setNote] = useState('');
+  const [advanceDateTime, setAdvanceDateTime] = useState(() => {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  });
   const [loading, setLoading] = useState(false);
 
   async function save() {
@@ -325,7 +330,7 @@ function AdvanceModal({ employee, onClose, onDone }) {
       await api.post(`/employees/${employee.id}/advance`, {
         amount: Number(amount),
         payment_method: paymentMethod,
-        date: new Date().toISOString().slice(0, 10),
+        date: advanceDateTime,
         note
       });
       onDone();
@@ -352,6 +357,16 @@ function AdvanceModal({ employee, onClose, onDone }) {
             onChange={e => setAmount(e.target.value)}
             placeholder="e.g. 500"
             autoFocus
+          />
+        </div>
+
+        <div className="field">
+          <label>Advance Date & Time *</label>
+          <input
+            type="datetime-local"
+            value={advanceDateTime}
+            onChange={e => setAdvanceDateTime(e.target.value)}
+            style={{ fontSize: 14, fontWeight: 600 }}
           />
         </div>
 
@@ -393,7 +408,7 @@ function AdvanceModal({ employee, onClose, onDone }) {
           <button
             className="btn btn-primary"
             onClick={save}
-            disabled={loading || !amount}
+            disabled={loading || !amount || !advanceDateTime}
             style={{ flex: 1 }}
           >
             {loading ? 'Saving...' : 'Save Advance'}
