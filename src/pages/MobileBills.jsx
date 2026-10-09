@@ -656,8 +656,8 @@ export default function MobileBills() {
           onClose={() => setSelectedReceiptJob(null)}
         />
       )}
-      {/* 🌀 Signature Full-Page Blur Loader Backdrop for Tab Switches & Loading */}
-      {loading && (
+      {/* 🌀 Signature Full-Page Blur Loader Backdrop for Initial Load */}
+      {loading && jobsList.length === 0 && (
         <div className="fullpage-loader-backdrop">
           <div className="loader-card">
             <div className="spinner-outer-ring">
