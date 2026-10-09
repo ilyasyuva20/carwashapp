@@ -70,6 +70,17 @@ export default function MobileScan() {
   const [workshopId, setWorkshopId] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('unsettled');
 
+  // Yesterday / Backdated Job Entry States
+  const [isBackdated, setIsBackdated] = useState(false);
+  const [backdateDateTime, setBackdateDateTime] = useState(() => {
+    const now = new Date();
+    now.setDate(now.getDate() - 1);
+    now.setHours(10, 0, 0, 0);
+    const pad = n => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T10:00`;
+  });
+  const [backdatePaymentMethod, setBackdatePaymentMethod] = useState('cash'); // 'cash' | 'gpay'
+
   const [customerName, setCustomerName] = useState('');
   const [beforePhotos, setBeforePhotos] = useState([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -421,7 +432,8 @@ export default function MobileScan() {
     setError('');
     try {
       await saveVehicleCorrections();
-      await api.post('/jobs', {
+
+      const jobPayload = {
         reg_number: vehicle.reg_number,
         wash_type_id: selectedWashId,
         eta_minutes: 30,
@@ -434,9 +446,21 @@ export default function MobileScan() {
         customer_type: customerType,
         workshop_id: (customerType === 'workshop' && workshopId) ? parseInt(workshopId) : null,
         payment_status: paymentStatus
-      });
+      };
 
-      setSuccessMsg(`✅ Job started successfully for ${vehicle.reg_number}!`);
+      if (isBackdated) {
+        const entryDt = backdateDateTime ? new Date(backdateDateTime) : new Date();
+        const entryIso = !isNaN(entryDt.getTime()) ? entryDt.toISOString() : new Date().toISOString();
+        jobPayload.entry_time = entryIso;
+        jobPayload.exit_time = entryIso;
+        jobPayload.completed_at = entryIso;
+        jobPayload.status = 'completed';
+        jobPayload.payment_method = backdatePaymentMethod;
+      }
+
+      await api.post('/jobs', jobPayload);
+
+      setSuccessMsg(isBackdated ? `✅ Backdated completed job created for ${vehicle.reg_number}!` : `✅ Job started successfully for ${vehicle.reg_number}!`);
       // Reset form
       setTimeout(() => {
         navigate('/mobile/jobs');
@@ -1324,6 +1348,87 @@ export default function MobileScan() {
               </div>
             </div>
 
+            {/* 📅 YESTERDAY / BACKDATED JOB ENTRY OPTION */}
+            <div className="mobile-field mb-12" style={{ background: isBackdated ? '#f0fdf4' : '#f8fafc', padding: 14, borderRadius: 12, border: isBackdated ? '2px solid #16a34a' : '1.5px solid #cbd5e1' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <strong style={{ fontSize: 13.5, color: isBackdated ? '#15803d' : '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>📅</span> Yesterday / Backdated Job Entry
+                  </strong>
+                  <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+                    Enter missed jobs from yesterday or past date directly as completed
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !isBackdated;
+                    setIsBackdated(nextVal);
+                    if (nextVal) {
+                      setPaymentStatus('settled');
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    borderRadius: 20,
+                    border: 'none',
+                    background: isBackdated ? '#16a34a' : '#e2e8f0',
+                    color: isBackdated ? '#ffffff' : '#64748b',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isBackdated ? 'ON ✓' : 'OFF'}
+                </button>
+              </div>
+
+              {isBackdated && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed #bbf7d0' }}>
+                  <div className="mobile-field mb-12">
+                    <label className="mobile-label" style={{ color: '#15803d', fontWeight: 700 }}>
+                      Select Date & Time <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      className="mobile-input"
+                      value={backdateDateTime}
+                      onChange={e => setBackdateDateTime(e.target.value)}
+                      style={{ fontSize: 15, fontWeight: 700, borderColor: '#16a34a', background: '#ffffff' }}
+                    />
+                  </div>
+
+                  <div className="mobile-field mb-12">
+                    <label className="mobile-label" style={{ color: '#15803d', fontWeight: 700 }}>
+                      Payment Method
+                    </label>
+                    <div className="mobile-grid-2">
+                      <button
+                        type="button"
+                        className={`mobile-tab-btn ${backdatePaymentMethod === 'cash' ? 'active settled' : ''}`}
+                        onClick={() => setBackdatePaymentMethod('cash')}
+                        style={{ background: backdatePaymentMethod === 'cash' ? '#16a34a' : '#ffffff', color: backdatePaymentMethod === 'cash' ? '#ffffff' : '#334155' }}
+                      >
+                        💵 Cash
+                      </button>
+                      <button
+                        type="button"
+                        className={`mobile-tab-btn ${backdatePaymentMethod === 'gpay' ? 'active settled' : ''}`}
+                        onClick={() => setBackdatePaymentMethod('gpay')}
+                        style={{ background: backdatePaymentMethod === 'gpay' ? '#16a34a' : '#ffffff', color: backdatePaymentMethod === 'gpay' ? '#ffffff' : '#334155' }}
+                      >
+                        📱 GPay / UPI
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: '#14532d', fontWeight: 600 }}>
+                    ✨ Job will be recorded as <strong>COMPLETED</strong> on {backdateDateTime ? new Date(backdateDateTime).toLocaleDateString('en-IN') : 'selected date'}.
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Editable Total Amount / Offer Price Field */}
             <div className="mobile-total-box" style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#f8fafc', padding: 14, borderRadius: 12, border: '1.5px solid #cbd5e1' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1399,8 +1504,9 @@ export default function MobileScan() {
             className="mobile-btn mobile-btn-submit-sticky"
             disabled={loading || (isCar && !washTypeId)}
             onClick={handleStartJob}
+            style={isBackdated ? { background: 'linear-gradient(135deg, #16a34a, #15803d)' } : undefined}
           >
-            {loading ? 'Starting...' : '🚀 Start Wash Job'}
+            {loading ? 'Processing...' : isBackdated ? '✅ Save Completed Job' : '🚀 Start Wash Job'}
           </button>
         </div>
       )}
