@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { DEFAULT_WASH_TYPES } from '../utils/defaultWashTypes';
 
 const CAR_SEGMENTS = [
   { id: 'hatchback', name: 'Hatchback', icon: '🚗' },
@@ -45,8 +46,14 @@ export default function PriceList() {
       if (pricingType === 'workshop' && selectedWorkshopId) {
         url += `?workshop_id=${selectedWorkshopId}`;
       }
-      const wt = await api.get(url);
-      const wtArray = Array.isArray(wt) ? wt : [];
+      let wt = [];
+      try {
+        wt = await api.get(url);
+      } catch (err) {
+        console.warn('Using default wash types in PriceList:', err);
+        wt = DEFAULT_WASH_TYPES;
+      }
+      const wtArray = (Array.isArray(wt) && wt.length > 0) ? wt : DEFAULT_WASH_TYPES;
       setWashTypes(wtArray);
 
       // Initialize local edit state map: `${washTypeId}_${segment}` -> price

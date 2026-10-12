@@ -4,6 +4,7 @@ import { api } from '../api';
 import MobileBottomNav from '../components/MobileBottomNav';
 import { recognizePlateNumber } from '../ocr';
 import { getBrandsForSegment, getModelsForBrand, COMMON_VEHICLE_COLORS, normalizeValue } from '../utils/vehicleOptions';
+import { DEFAULT_WASH_TYPES, getPriceForPackage } from '../utils/defaultWashTypes';
 
 function compressImage(file, maxWidth = 1000, maxHeight = 1000, quality = 0.75) {
   return new Promise((resolve) => {
@@ -57,13 +58,13 @@ function getImageUrl(url) {
 export default function MobileScan() {
   const navigate = useNavigate();
 
-  const [washTypes, setWashTypes] = useState([]);
+  const [washTypes, setWashTypes] = useState(DEFAULT_WASH_TYPES);
   const [workshops, setWorkshops] = useState([]);
 
   const [regNumber, setRegNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [vehicle, setVehicle] = useState(null);
-  const [washTypeId, setWashTypeId] = useState('');
+  const [washTypeId, setWashTypeId] = useState('1');
   const [hasChainLube, setHasChainLube] = useState(false);
 
   const [customerType, setCustomerType] = useState('normal'); // 'normal' | 'workshop'
@@ -186,12 +187,21 @@ export default function MobileScan() {
       url += `?workshop_id=${workshopId || 0}`;
     }
     api.get(url).then(data => {
-      setWashTypes(data);
-      if (Array.isArray(data) && data.length > 0 && !washTypeId) {
-        setWashTypeId(String(data[0].id));
+      if (Array.isArray(data) && data.length > 0) {
+        setWashTypes(data);
+        if (!washTypeId || !data.some(wt => String(wt.id) === String(washTypeId))) {
+          const firstCarWash = data.find(wt => !wt.name.toLowerCase().includes('bike') && !wt.name.toLowerCase().includes('scooter') && !wt.name.toLowerCase().includes('chain'));
+          if (firstCarWash) {
+            setWashTypeId(String(firstCarWash.id));
+          }
+        }
       }
+    }).catch(err => {
+      console.warn('Could not load live wash types, keeping default packages:', err);
+    });
+    api.get('/workshops').then(data => {
+      if (Array.isArray(data)) setWorkshops(data);
     }).catch(err => console.error(err));
-    api.get('/workshops').then(setWorkshops).catch(err => console.error(err));
   }, [customerType, workshopId]);
 
   async function handlePlateOcr(e) {
@@ -361,28 +371,35 @@ export default function MobileScan() {
   }, [vehicle?.segment, workshops, workshopId, customerType, isCar, isBike, isScooter]);
 
   const carWashTypes = washTypes.filter(wt => !wt.name.toLowerCase().includes('bike') && !wt.name.toLowerCase().includes('scooter') && !wt.name.toLowerCase().includes('chain'));
-  const bikeWashType = washTypes.find(wt => wt.name.includes('Bike') || wt.name.includes('Scooter'));
-  const chainLubeType = washTypes.find(wt => wt.name.includes('Chain'));
+  const effectiveCarWashTypes = carWashTypes.length > 0 ? carWashTypes : DEFAULT_WASH_TYPES.filter(wt => !wt.name.toLowerCase().includes('bike') && !wt.name.toLowerCase().includes('scooter') && !wt.name.toLowerCase().includes('chain'));
+  const bikeWashType = washTypes.find(wt => wt.name.includes('Bike') || wt.name.includes('Scooter')) || DEFAULT_WASH_TYPES.find(wt => wt.name.includes('Bike'));
+  const chainLubeType = washTypes.find(wt => wt.name.includes('Chain')) || DEFAULT_WASH_TYPES.find(wt => wt.name.includes('Chain'));
+
+  useEffect(() => {
+    if (isCar) {
+      const valid = effectiveCarWashTypes.some(wt => String(wt.id) === String(washTypeId));
+      if (!valid && effectiveCarWashTypes.length > 0) {
+        setWashTypeId(String(effectiveCarWashTypes[0].id));
+      }
+    }
+  }, [isCar, effectiveCarWashTypes, washTypeId]);
+
   const selectedWashId = (isBike || isScooter)
-    ? (bikeWashType ? bikeWashType.id : (washTypes[0]?.id || 1))
-    : (washTypeId ? parseInt(washTypeId) : (carWashTypes[0]?.id || washTypes[0]?.id || 1));
+    ? (bikeWashType ? bikeWashType.id : 21)
+    : (washTypeId ? parseInt(washTypeId) : (effectiveCarWashTypes[0]?.id || 1));
 
   const dynamicLubePrice = customerType === 'workshop'
     ? (chainLubeType?.workshop_pricing?.bike ?? chainLubeType?.pricing?.bike ?? 150)
     : (chainLubeType?.pricing?.bike ?? 150);
 
   let baseWashPrice = null;
-  const currentSegment = vehicle?.segment;
-  if (currentSegment) {
-    const selectedWash = (isBike || isScooter)
-      ? bikeWashType
-      : washTypes.find(wt => wt.id === parseInt(washTypeId));
-
+  const currentSegment = vehicle?.segment || 'hatchback';
+  if (isBike || isScooter) {
+    baseWashPrice = bikeWashType ? getPriceForPackage(bikeWashType, currentSegment, customerType) : 250;
+  } else if (isCar) {
+    const selectedWash = washTypes.find(wt => String(wt.id) === String(washTypeId)) || effectiveCarWashTypes[0];
     if (selectedWash) {
-      const priceMap = customerType === 'workshop' ? (selectedWash.workshop_pricing || selectedWash.pricing) : selectedWash.pricing;
-      baseWashPrice = priceMap?.[currentSegment] ?? (isBike || isScooter ? 250 : null);
-    } else if (isBike || isScooter) {
-      baseWashPrice = 250;
+      baseWashPrice = getPriceForPackage(selectedWash, currentSegment, customerType);
     }
   }
 
@@ -1319,17 +1336,14 @@ export default function MobileScan() {
                   onChange={e => setWashTypeId(e.target.value)}
                 >
                   <option value="">-- Select Wash Service --</option>
-                  {washTypes
-                    .filter(wt => !wt.name.toLowerCase().includes('bike') && !wt.name.toLowerCase().includes('scooter') && !wt.name.toLowerCase().includes('chain'))
-                    .map(wt => {
-                      const pMap = customerType === 'workshop' ? wt.workshop_pricing : wt.pricing;
-                      const pVal = pMap?.[vehicle.segment] || 0;
-                      return (
-                        <option key={wt.id} value={wt.id}>
-                          {wt.name} (₹{pVal})
-                        </option>
-                      );
-                    })}
+                  {effectiveCarWashTypes.map(wt => {
+                    const pVal = getPriceForPackage(wt, vehicle?.segment || 'hatchback', customerType);
+                    return (
+                      <option key={wt.id} value={wt.id}>
+                        {wt.name} (₹{pVal})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             )}

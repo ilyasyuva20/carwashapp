@@ -1,5 +1,11 @@
-const BASE = import.meta.env.VITE_API_URL || '/api';
-const FALLBACK_BASE = 'http://localhost:4000/api';
+const isLocalhost = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname.startsWith('192.168.')
+);
+
+const BASE = isLocalhost ? '/api' : (import.meta.env.VITE_API_URL || '/api');
+const FALLBACK_BASE = isLocalhost ? 'http://localhost:4000/api' : '/api';
 
 async function request(path, options = {}) {
   const url = BASE + path;
@@ -10,18 +16,22 @@ async function request(path, options = {}) {
       ...options
     });
   } catch (err) {
-    if (BASE !== FALLBACK_BASE && !path.startsWith('http')) {
-      res = await fetch(FALLBACK_BASE + path, {
-        headers: { 'Content-Type': 'application/json' },
-        ...options
-      });
+    if (FALLBACK_BASE && FALLBACK_BASE !== BASE && !path.startsWith('http')) {
+      try {
+        res = await fetch(FALLBACK_BASE + path, {
+          headers: { 'Content-Type': 'application/json' },
+          ...options
+        });
+      } catch (fallbackErr) {
+        throw err;
+      }
     } else {
       throw err;
     }
   }
 
   if (!res.ok) {
-    if (res.status === 404 && BASE !== FALLBACK_BASE && !path.startsWith('http')) {
+    if (FALLBACK_BASE && FALLBACK_BASE !== BASE && !path.startsWith('http')) {
       try {
         const fallbackRes = await fetch(FALLBACK_BASE + path, {
           headers: { 'Content-Type': 'application/json' },
@@ -51,10 +61,17 @@ export const api = {
     try {
       res = await fetch(BASE + path, { method: 'POST', body: formData });
     } catch (e) {
-      res = await fetch(FALLBACK_BASE + path, { method: 'POST', body: formData });
+      if (FALLBACK_BASE && FALLBACK_BASE !== BASE) {
+        res = await fetch(FALLBACK_BASE + path, { method: 'POST', body: formData });
+      } else {
+        throw e;
+      }
     }
-    if (!res.ok && res.status === 404) {
-      res = await fetch(FALLBACK_BASE + path, { method: 'POST', body: formData });
+    if (!res.ok && FALLBACK_BASE && FALLBACK_BASE !== BASE) {
+      try {
+        const fallbackRes = await fetch(FALLBACK_BASE + path, { method: 'POST', body: formData });
+        if (fallbackRes.ok) return fallbackRes.json();
+      } catch (e) {}
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -67,10 +84,17 @@ export const api = {
     try {
       res = await fetch(BASE + path, { method: 'PUT', body: formData });
     } catch (e) {
-      res = await fetch(FALLBACK_BASE + path, { method: 'PUT', body: formData });
+      if (FALLBACK_BASE && FALLBACK_BASE !== BASE) {
+        res = await fetch(FALLBACK_BASE + path, { method: 'PUT', body: formData });
+      } else {
+        throw e;
+      }
     }
-    if (!res.ok && res.status === 404) {
-      res = await fetch(FALLBACK_BASE + path, { method: 'PUT', body: formData });
+    if (!res.ok && FALLBACK_BASE && FALLBACK_BASE !== BASE) {
+      try {
+        const fallbackRes = await fetch(FALLBACK_BASE + path, { method: 'PUT', body: formData });
+        if (fallbackRes.ok) return fallbackRes.json();
+      } catch (e) {}
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
