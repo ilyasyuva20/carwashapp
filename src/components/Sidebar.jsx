@@ -13,7 +13,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     const path = location.pathname;
-    if (path === '/bills' || path === '/workshop-bills') {
+    if (path === '/bills' || path === '/workshop-bills' || path === '/daily-bills') {
       setOpenSections(prev => ({ ...prev, billMgmt: true }));
     } else if (path === '/workshops' || path === '/price-list' || path === '/suppliers') {
       setOpenSections(prev => ({ ...prev, masterData: true }));
@@ -73,6 +73,10 @@ export default function Sidebar() {
           </div>
           {openSections.billMgmt && (
             <div className="nav-sub-menu">
+              <NavLink to="/daily-bills" className={subLinkClass}>
+                <span className="nav-sub-icon">📅</span>
+                <span>Daily Bill</span>
+              </NavLink>
               <NavLink to="/bills" className={subLinkClass}>
                 <span className="nav-sub-icon">📄</span>
                 <span>Normal Bill</span>

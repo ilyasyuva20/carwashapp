@@ -5,6 +5,7 @@ import Today from './pages/Today.jsx';
 import RunningJobs from './pages/RunningJobs.jsx';
 import Jobs from './pages/Jobs.jsx';
 import Bills from './pages/Bills.jsx';
+import DailyBills from './pages/DailyBills.jsx';
 import WorkshopBills from './pages/WorkshopBills.jsx';
 import PriceList from './pages/PriceList.jsx';
 import Employees from './pages/Employees.jsx';
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/" element={<Today />} />
           <Route path="/running-jobs" element={<RunningJobs />} />
           <Route path="/jobs" element={<Jobs />} />
+          <Route path="/daily-bills" element={<DailyBills />} />
           <Route path="/bills" element={<Bills />} />
           <Route path="/workshop-bills" element={<WorkshopBills />} />
           <Route path="/price-list" element={<PriceList />} />

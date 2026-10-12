@@ -1625,5 +1625,20 @@ tbody tr:hover { background: #f8fafc; }
   box-shadow: 0 2px 4px rgba(13, 148, 136, 0.2);
 }
 
-
-
+@media print {
+  .sidebar, .btn, .btn-group, input, .modal-backdrop, .fullpage-loader-backdrop {
+    display: none !important;
+  }
+  .app-shell {
+    display: block !important;
+  }
+  .main {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+  .daily-bills-page .card {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+  }
+}
