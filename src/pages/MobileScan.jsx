@@ -74,14 +74,18 @@ export default function MobileScan() {
   const [isBackdated, setIsBackdated] = useState(false);
   const [backdateDateTime, setBackdateDateTime] = useState(() => {
     const now = new Date();
-    now.setDate(now.getDate() - 1);
-    now.setHours(10, 0, 0, 0);
     const pad = n => String(n).padStart(2, '0');
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T10:00`;
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
   });
   const [backdatePaymentMethod, setBackdatePaymentMethod] = useState('cash'); // 'cash' | 'gpay' | 'split'
   const [backdateCashAmount, setBackdateCashAmount] = useState('');
   const [backdateGpayAmount, setBackdateGpayAmount] = useState('');
+
+  const [normalStartTime, setNormalStartTime] = useState(() => {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  });
 
   const [customerName, setCustomerName] = useState('');
   const [beforePhotos, setBeforePhotos] = useState([]);
@@ -454,6 +458,15 @@ export default function MobileScan() {
         color: vehicle?.color === '__OTHER__' ? '' : (vehicle?.color || 'Unknown')
       };
 
+      if (paymentStatus === 'settled' || isBackdated) {
+        jobPayload.payment_status = 'settled'; // enforce settled
+        jobPayload.payment_method = backdatePaymentMethod;
+        if (backdatePaymentMethod === 'split') {
+          jobPayload.cash_amount = Number(backdateCashAmount) || 0;
+          jobPayload.gpay_amount = Number(backdateGpayAmount) || 0;
+        }
+      }
+
       if (isBackdated) {
         const entryDt = backdateDateTime ? new Date(backdateDateTime) : new Date();
         const entryIso = !isNaN(entryDt.getTime()) ? entryDt.toISOString() : new Date().toISOString();
@@ -461,11 +474,14 @@ export default function MobileScan() {
         jobPayload.exit_time = entryIso;
         jobPayload.completed_at = entryIso;
         jobPayload.status = 'completed';
-        jobPayload.payment_status = 'settled';
-        jobPayload.payment_method = backdatePaymentMethod;
-        if (backdatePaymentMethod === 'split') {
-          jobPayload.cash_amount = Number(backdateCashAmount) || 0;
-          jobPayload.gpay_amount = Number(backdateGpayAmount) || 0;
+      } else {
+        if (normalStartTime) {
+          const now = new Date();
+          const [hh, mm] = normalStartTime.split(':');
+          if (hh && mm) {
+            now.setHours(parseInt(hh, 10), parseInt(mm, 10), 0, 0);
+            jobPayload.entry_time = now.toISOString();
+          }
         }
       }
 
@@ -1236,7 +1252,6 @@ export default function MobileScan() {
                           <input
                             type="file"
                             accept="image/*"
-                            capture="environment"
                             onChange={e => handleBeforePhotoUpload(e, slot)}
                             style={{ display: 'none' }}
                           />
@@ -1408,7 +1423,11 @@ export default function MobileScan() {
                       style={{ fontSize: 15, fontWeight: 700, borderColor: '#16a34a', background: '#ffffff' }}
                     />
                   </div>
+                </div>
+              )}
 
+              {(isBackdated || paymentStatus === 'settled') && (
+                <div style={{ marginTop: isBackdated ? 0 : 12, paddingTop: isBackdated ? 0 : 12, borderTop: isBackdated ? 'none' : '1px dashed #bbf7d0' }}>
                   <div className="mobile-field mb-12">
                     <label className="mobile-label" style={{ color: '#15803d', fontWeight: 700 }}>
                       Payment Method
@@ -1492,12 +1511,29 @@ export default function MobileScan() {
                     )}
                   </div>
 
-                  <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: '#14532d', fontWeight: 600 }}>
-                    ✨ Job will be recorded as <strong>COMPLETED</strong> on {backdateDateTime ? new Date(backdateDateTime).toLocaleDateString('en-IN') : 'selected date'}.
-                  </div>
+                  {isBackdated && (
+                    <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: '#14532d', fontWeight: 600 }}>
+                      ✨ Job will be recorded as <strong>COMPLETED</strong> on {backdateDateTime ? new Date(backdateDateTime).toLocaleDateString('en-IN') : 'selected date'}.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
+
+            {!isBackdated && (
+              <div className="mobile-field mb-12" style={{ background: '#f8fafc', padding: 14, borderRadius: 12, border: '1.5px solid #cbd5e1' }}>
+                <label className="mobile-label" style={{ color: '#0f172a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>🕒</span> Start Time <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="time"
+                  className="mobile-input"
+                  value={normalStartTime}
+                  onChange={e => setNormalStartTime(e.target.value)}
+                  style={{ fontSize: 15, fontWeight: 700, borderColor: '#cbd5e1', background: '#ffffff', marginTop: 8 }}
+                />
+              </div>
+            )}
 
             {/* Editable Total Amount / Offer Price Field */}
             <div className="mobile-total-box" style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#f8fafc', padding: 14, borderRadius: 12, border: '1.5px solid #cbd5e1' }}>

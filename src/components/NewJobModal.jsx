@@ -23,10 +23,8 @@ export default function NewJobModal({ onClose, onCreated }) {
   const [isBackdated, setIsBackdated] = useState(false);
   const [backdateDateTime, setBackdateDateTime] = useState(() => {
     const now = new Date();
-    now.setDate(now.getDate() - 1);
-    now.setHours(10, 0, 0, 0);
     const pad = n => String(n).padStart(2, '0');
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T10:00`;
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
   });
   const [backdatePaymentMethod, setBackdatePaymentMethod] = useState('cash'); // 'cash' | 'gpay' | 'split'
   const [backdateCashAmount, setBackdateCashAmount] = useState('');

@@ -1,19 +1,42 @@
 const BASE = import.meta.env.VITE_API_URL || '/api';
+const FALLBACK_BASE = 'http://localhost:4000/api';
 
 async function request(path, options = {}) {
-  const t0 = Date.now();
-  const res = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options
-  });
+  const url = BASE + path;
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options
+    });
+  } catch (err) {
+    if (BASE !== FALLBACK_BASE && !path.startsWith('http')) {
+      res = await fetch(FALLBACK_BASE + path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      });
+    } else {
+      throw err;
+    }
+  }
+
   if (!res.ok) {
+    if (res.status === 404 && BASE !== FALLBACK_BASE && !path.startsWith('http')) {
+      try {
+        const fallbackRes = await fetch(FALLBACK_BASE + path, {
+          headers: { 'Content-Type': 'application/json' },
+          ...options
+        });
+        if (fallbackRes.ok) {
+          const text = await fallbackRes.text();
+          return JSON.parse(text);
+        }
+      } catch (e) {}
+    }
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Request failed: ${res.status}`);
   }
   const text = await res.text();
-  // #region agent log
-  fetch('http://127.0.0.1:7618/ingest/e176f1cd-2325-4489-82d4-cb737f29d94a',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fee15e'},body:JSON.stringify({sessionId:'fee15e',runId:'pre-fix',hypothesisId:'D',location:'api.js:request',message:'frontend api request',data:{path,ms:Date.now()-t0,bytes:text.length,method:options.method||'GET'},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return JSON.parse(text);
 }
 
@@ -24,10 +47,15 @@ export const api = {
   del: (path) => request(path, { method: 'DELETE' }),
   delete: (path) => request(path, { method: 'DELETE' }),
   postForm: async (path, formData) => {
-    const res = await fetch(BASE + path, {
-      method: 'POST',
-      body: formData
-    });
+    let res;
+    try {
+      res = await fetch(BASE + path, { method: 'POST', body: formData });
+    } catch (e) {
+      res = await fetch(FALLBACK_BASE + path, { method: 'POST', body: formData });
+    }
+    if (!res.ok && res.status === 404) {
+      res = await fetch(FALLBACK_BASE + path, { method: 'POST', body: formData });
+    }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || `Request failed: ${res.status}`);
@@ -35,10 +63,15 @@ export const api = {
     return res.json();
   },
   putForm: async (path, formData) => {
-    const res = await fetch(BASE + path, {
-      method: 'PUT',
-      body: formData
-    });
+    let res;
+    try {
+      res = await fetch(BASE + path, { method: 'PUT', body: formData });
+    } catch (e) {
+      res = await fetch(FALLBACK_BASE + path, { method: 'PUT', body: formData });
+    }
+    if (!res.ok && res.status === 404) {
+      res = await fetch(FALLBACK_BASE + path, { method: 'PUT', body: formData });
+    }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || `Request failed: ${res.status}`);

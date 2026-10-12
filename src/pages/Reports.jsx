@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import DatePickerInput from '../components/DatePickerInput';
+import AttendanceReportModal from '../components/AttendanceReportModal';
 
 function daysAgo(n) {
   const d = new Date();
@@ -655,69 +656,7 @@ export default function Reports() {
 
           {/* 7. ATTENDANCE REPORT PAGE */}
           {activeTab === 'attendance' && (
-            <div>
-              <div className="grid grid-4 mb-16">
-                <div className="card stat-card">
-                  <div className="icon">👥</div>
-                  <div className="value">{data.total_employees || 0}</div>
-                  <div className="label">Active Employees</div>
-                </div>
-                <div className="card stat-card">
-                  <div className="icon">✅</div>
-                  <div className="value" style={{ color: 'var(--green)' }}>{data.present_count || 0}</div>
-                  <div className="label">Present Days</div>
-                </div>
-                <div className="card stat-card">
-                  <div className="icon">❌</div>
-                  <div className="value" style={{ color: 'var(--red)' }}>{data.absent_count || 0}</div>
-                  <div className="label">Absent Days</div>
-                </div>
-                <div className="card stat-card">
-                  <div className="icon">⏱️</div>
-                  <div className="value">{data.total_overtime_minutes || 0} m</div>
-                  <div className="label">Total Overtime ({data.total_late_minutes || 0}m late)</div>
-                </div>
-              </div>
-
-              <div className="card">
-                <h3>Attendance Log ({data.records?.length || 0})</h3>
-                <div className="table-responsive" style={{ overflowX: 'auto' }}>
-                  <table className="table" style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
-                    <thead>
-                      <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ padding: '10px 12px' }}>Date</th>
-                        <th style={{ padding: '10px 12px' }}>Employee</th>
-                        <th style={{ padding: '10px 12px' }}>Status</th>
-                        <th style={{ padding: '10px 12px' }}>Check In / Out</th>
-                        <th style={{ padding: '10px 12px' }}>Late / Overtime</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(!data.records || data.records.length === 0) && (
-                        <tr><td colSpan="5" className="muted" style={{ padding: 16, textAlign: 'center' }}>No attendance records found in this range.</td></tr>
-                      )}
-                      {data.records?.map(r => (
-                        <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                          <td style={{ padding: '10px 12px' }}>{r.date}</td>
-                          <td style={{ padding: '10px 12px', fontWeight: 600 }}>{r.employee_name}</td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span className={`pill ${r.status === 'present' ? 'pill-green' : r.status === 'absent' ? 'pill-red' : 'pill-amber'}`}>
-                              {r.status}
-                            </span>
-                          </td>
-                          <td style={{ padding: '10px 12px' }}>
-                            {r.check_in || '-'} to {r.check_out || '-'}
-                          </td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span className="muted">{r.late_minutes || 0}m late / {r.overtime_minutes || 0}m OT</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+            <AttendanceReportModal isEmbedded={true} />
           )}
 
           {/* 8. SALARY REPORT PAGE */}

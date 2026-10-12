@@ -7,6 +7,16 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+function formatSalaryFormula(base, leaveDed, lateDed, otPay, advDed, netPay) {
+  const parts = [base];
+  if (leaveDed > 0) parts.push(` - ${leaveDed}`);
+  if (lateDed > 0) parts.push(` - ${lateDed}`);
+  if (otPay > 0) parts.push(` + ${otPay}`);
+  if (advDed > 0) parts.push(` - ${advDed}`);
+  if (parts.length === 1) return `₹${Number(base || 0).toLocaleString()}`;
+  return `${parts.join('')} = ₹${Number(netPay || 0).toLocaleString()}`;
+}
+
 export default function SalaryAdvances() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -77,7 +87,7 @@ export default function SalaryAdvances() {
   let totalNetPayable = 0;
 
   employees.forEach(emp => {
-    const base = Number(emp.salary_monthly) || 0;
+    const base = Number(emp.salary_monthly || emp.monthly_salary || (emp.daily_wage ? emp.daily_wage * 30 : 0)) || 0;
     totalMonthlySalary += base;
 
     const pay = payrollMap[emp.id];
@@ -219,14 +229,15 @@ export default function SalaryAdvances() {
             <tbody>
               {filteredEmployees.map(emp => {
                 const pay = payrollMap[emp.id] || {};
-                const base = Number(emp.salary_monthly) || 0;
+                const base = Number(emp.salary_monthly || emp.monthly_salary || (emp.daily_wage ? emp.daily_wage * 30 : 0)) || 0;
                 const perDay = pay.per_day_salary || Math.round(base / 30);
                 const hourly = pay.hourly_rate || Math.round((base / 30) / 8);
 
                 const leaveDed = pay.leave_deduction || 0;
                 const lateDed = pay.late_deduction || 0;
                 const advDed = pay.advance_deduction || 0;
-                const netPay = pay.net_pay !== undefined ? pay.net_pay : Math.max(0, base - advDed);
+                const otPay = pay.overtime_pay || 0;
+                const netPay = pay.net_pay !== undefined ? pay.net_pay : Math.max(0, base - leaveDed - lateDed + otPay - advDed);
 
                 return (
                   <tr key={emp.id} style={{ borderBottom: '1px solid var(--border)', fontSize: 14 }}>
@@ -253,7 +264,12 @@ export default function SalaryAdvances() {
                       {advDed > 0 ? `- ₹${advDed}` : '₹0'}
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 700, color: '#16a34a', fontSize: 15 }}>
-                      ₹{netPay.toLocaleString()}
+                      <div>₹{netPay.toLocaleString()}</div>
+                      {(leaveDed > 0 || lateDed > 0 || advDed > 0 || otPay > 0) && (
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#475569', marginTop: 2, fontFamily: 'monospace' }}>
+                          {formatSalaryFormula(base, leaveDed, lateDed, otPay, advDed, netPay)}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                       <div className="flex gap-8" style={{ justifyContent: 'flex-end' }}>
@@ -492,7 +508,7 @@ function SalaryBreakdownModal({ employee, payroll, advances, selectedMonthPrefix
   const emp = employee;
   const pay = payroll || {};
 
-  const baseSalary = Number(emp.salary_monthly) || 0;
+  const baseSalary = Number(emp.salary_monthly || emp.monthly_salary || (emp.daily_wage ? emp.daily_wage * 30 : 0)) || 0;
   const perDaySalary = pay.per_day_salary || (baseSalary / 30);
   const hourlyRate = pay.hourly_rate || (perDaySalary / 8);
   const perMinuteRate = hourlyRate / 60;
@@ -601,6 +617,13 @@ function SalaryBreakdownModal({ employee, payroll, advances, selectedMonthPrefix
             <strong style={{ fontSize: 20, fontWeight: 800, color: '#16a34a' }}>
               ₹{netPay.toLocaleString()}
             </strong>
+          </div>
+
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', marginTop: 12, fontSize: 13, color: '#166534', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+            <span>🧮 Salary Calculation:</span>
+            <span style={{ fontSize: 14, fontFamily: 'monospace', fontWeight: 800 }}>
+              {formatSalaryFormula(baseSalary, leaveDeduction, lateDeduction, overtimePay, advanceDeduction, netPay)}
+            </span>
           </div>
         </div>
 

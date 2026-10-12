@@ -54,7 +54,7 @@ export default function DatePickerInput({ value, onChange, style, className }) {
           boxSizing: 'border-box'
         }}
       >
-        <span>{displayVal || 'DD-MM-YYYY'}</span>
+        <span>{displayVal || 'DD/MM/YYYY'}</span>
         <span style={{ fontSize: 14 }}>📅</span>
       </div>
     </div>
