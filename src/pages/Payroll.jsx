@@ -12,16 +12,22 @@ export default function Payroll() {
   const [generated, setGenerated] = useState({});
 
   async function load() {
-    const emps = await api.get('/employees');
-    setEmployees(emps);
+    const [emps, gen] = await Promise.all([
+      api.get('/employees').catch(() => []),
+      api.get(`/payroll?month=${month}&year=${year}`).catch(() => [])
+    ]);
+    setEmployees(emps || []);
+
     const previewMap = {};
-    for (const e of emps) {
-      previewMap[e.id] = await api.get(`/payroll/preview?employee_id=${e.id}&month=${month}&year=${year}`);
-    }
+    await Promise.all((emps || []).map(async (e) => {
+      try {
+        previewMap[e.id] = await api.get(`/payroll/preview?employee_id=${e.id}&month=${month}&year=${year}`);
+      } catch (err) {}
+    }));
     setPreviews(previewMap);
-    const gen = await api.get(`/payroll?month=${month}&year=${year}`);
+
     const genMap = {};
-    gen.forEach(g => { genMap[g.employee_id] = g; });
+    (gen || []).forEach(g => { genMap[g.employee_id] = g; });
     setGenerated(genMap);
   }
   useEffect(() => { load(); }, [month, year]);

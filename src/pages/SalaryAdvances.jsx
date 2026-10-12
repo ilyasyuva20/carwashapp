@@ -42,19 +42,18 @@ export default function SalaryAdvances() {
       const advMap = {};
       const payMap = {};
 
-      for (const emp of (emps || [])) {
-        // Fetch advances history
-        const advs = await api.get(`/employees/${emp.id}/advances`);
-        advMap[emp.id] = advs || [];
-
-        // Fetch payroll calculation preview
+      await Promise.all((emps || []).map(async (emp) => {
         try {
-          const preview = await api.get(`/payroll/preview?employee_id=${emp.id}&month=${selectedMonth}&year=${selectedYear}`);
-          payMap[emp.id] = preview;
+          const [advs, preview] = await Promise.all([
+            api.get(`/employees/${emp.id}/advances`).catch(() => []),
+            api.get(`/payroll/preview?employee_id=${emp.id}&month=${selectedMonth}&year=${selectedYear}`).catch(() => null)
+          ]);
+          advMap[emp.id] = advs || [];
+          if (preview) payMap[emp.id] = preview;
         } catch (e) {
-          console.error('Failed to preview payroll for emp', emp.id, e);
+          console.error('Failed to load details for emp', emp.id, e);
         }
-      }
+      }));
 
       setAdvancesMap(advMap);
       setPayrollMap(payMap);

@@ -120,9 +120,11 @@ export default function Attendance() {
   async function load() {
     setLoading(true);
     try {
-      const emps = await api.get('/employees?status=active');
+      const [emps, att] = await Promise.all([
+        api.get('/employees?status=active'),
+        api.get(`/attendance?date=${date}`)
+      ]);
       setEmployees(emps || []);
-      const att = await api.get(`/attendance?date=${date}`);
       setAttendance(att || []);
     } catch (err) {
       console.error('Error loading attendance:', err);

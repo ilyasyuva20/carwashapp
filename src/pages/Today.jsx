@@ -14,11 +14,12 @@ export default function Today() {
   async function loadData(dateStr) {
     setLoading(true);
     try {
-      const data = await api.get(`/reports/ledger?date=${dateStr}`);
+      const [data, jobs] = await Promise.all([
+        api.get(`/reports/ledger?date=${dateStr}`),
+        api.get('/jobs?status=in_progress')
+      ]);
       setLedger(data);
-
-      const jobs = await api.get('/jobs?status=in_progress');
-      setInProgress(jobs);
+      setInProgress(jobs || []);
     } catch (err) {
       console.error(err);
     } finally {
