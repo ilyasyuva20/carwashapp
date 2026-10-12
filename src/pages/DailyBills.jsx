@@ -74,10 +74,15 @@ export default function DailyBills() {
   const [splitModalJob, setSplitModalJob] = useState(null);
   const [splitCash, setSplitCash] = useState('');
   const [splitGpay, setSplitGpay] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   // Load Data
-  async function loadDailyBills() {
-    setLoading(true);
+  async function loadDailyBills(isManualRefresh = false) {
+    if (isManualRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
       let params = `?date=${selectedDate}`;
       if (customerFilter !== 'all') params += `&customer_type=${customerFilter}`;
@@ -87,11 +92,15 @@ export default function DailyBills() {
 
       const res = await api.get(`/bills/daily${params}`);
       setData(res || { date: selectedDate, summary: {}, jobs: [] });
+      if (isManualRefresh) {
+        toast.success('Data refreshed!', { duration: 1500 });
+      }
     } catch (err) {
       console.error('Failed to load daily bills:', err);
       toast.error('Failed to load daily bills');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
 
@@ -291,6 +300,36 @@ export default function DailyBills() {
                 style={{ width: 140, fontWeight: 700 }}
               />
             </div>
+
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => loadDailyBills(true)}
+              disabled={refreshing}
+              title="Refresh data with current selections"
+              style={{
+                padding: '7px 14px',
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontWeight: 700,
+                borderColor: '#0284c7',
+                color: '#0284c7',
+                background: '#f0f9ff',
+                cursor: refreshing ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-block',
+                  animation: refreshing ? 'spinRing 0.8s linear infinite' : 'none'
+                }}
+              >
+                🔄
+              </span>
+              <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
 
             <button
               type="button"
@@ -534,8 +573,20 @@ export default function DailyBills() {
           <div style={{ fontWeight: 700, fontSize: 14, color: '#334155' }}>
             Bills List for {formatDateDisplay(selectedDate)} ({jobsList.length} items)
           </div>
-          <div className="muted" style={{ fontSize: 12 }}>
-            Sorted by completion time (Latest first)
+          <div className="flex center gap-10">
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={() => loadDailyBills(true)}
+              disabled={refreshing}
+              title="Refresh table data"
+              style={{ padding: '3px 8px', fontSize: 12, fontWeight: 700, color: '#0284c7', background: '#e0f2fe', borderRadius: 4 }}
+            >
+              <span style={{ display: 'inline-block', animation: refreshing ? 'spinRing 0.8s linear infinite' : 'none' }}>🔄</span> {refreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Sorted by completion time (Latest first)
+            </span>
           </div>
         </div>
 
